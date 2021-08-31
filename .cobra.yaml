@@ -1,0 +1,8 @@
+author: Opsani <support@opsani.com>
+year: 2021
+license:
+  header: This file is part of opsani-ignite
+  text: |
+    {{ .copyright }}
+
+
