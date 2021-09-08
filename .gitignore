@@ -1,3 +1,9 @@
+# Project-specific
+# Analysis sample output (temp)
+samples/
+
+# ---
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
