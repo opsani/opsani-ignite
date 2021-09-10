@@ -7,9 +7,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"net/url"
 	"os"
+
+	"github.com/spf13/cobra"
 
 	"github.com/spf13/viper"
 )
@@ -30,7 +31,7 @@ a list of optimization candidates in preferred order of onboarding.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return parseRequiredUriFlag(&promUri, promUriString, "-p/--prometheus-url")
 	},
-	Run: run_ignite,
+	Run: runIgnite,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

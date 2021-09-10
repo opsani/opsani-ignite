@@ -316,12 +316,6 @@ func mapNamespace(promApi v1.API, ctx context.Context, namespace model.LabelValu
 			app.Opportunity.Cons = append(app.Opportunity.Cons, fmt.Sprintf("Failed to collect deployment details: %v", err))
 		}
 
-		// Analyze apps
-		if app.Settings.WriteableVolume {
-			app.Opportunity.Rating = 0
-			app.Opportunity.Confidence = 100
-			app.Opportunity.Cons = append(app.Opportunity.Cons, "Stateful: pods have writeable volumes")
-		}
 		//fmt.Printf("%#v\n\n", app)
 	}
 
