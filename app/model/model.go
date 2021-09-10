@@ -11,18 +11,20 @@ type AppMetadata struct {
 }
 
 type AppSettings struct {
-	Replicas       int
-	HpaEnabled     bool
-	VpaEnabled     bool
-	MpaEnabled     bool
-	HpaMinReplicas int
-	HpaMaxReplicas int
+	Replicas        int
+	HpaEnabled      bool
+	VpaEnabled      bool
+	MpaEnabled      bool
+	HpaMinReplicas  int
+	HpaMaxReplicas  int
+	WriteableVolume bool
 	// TODO: consider adding replicas stats (min/max/avg/median)
 }
 
 type AppMetrics struct {
-	CpuUtilization    float32
-	MemoryUtilization float32
+	AverageReplicas   float64
+	CpuUtilization    float64
+	MemoryUtilization float64
 	// TODO: add network traffic, esp. indication of traffic
 }
 
