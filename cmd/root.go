@@ -18,6 +18,20 @@ import (
 var cfgFile string
 var promUriString string
 var promUri *url.URL
+var namespace string
+var deployment string
+var outputFormat string
+
+const (
+	OUTPUT_TABLE  = "table"
+	OUTPUT_DETAIL = "detail"
+	// TODO: add JSON and YAML
+)
+
+// constant table - format types, keep in sync with OUTPUT_xxx constants above
+func getOutputFormats() []string {
+	return []string{OUTPUT_TABLE, OUTPUT_DETAIL}
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -29,6 +43,24 @@ application workloads running on Kubernetes and identifies optimization opportun
 For each application it finds, it evaluates what can be optimized and displays
 a list of optimization candidates in preferred order of onboarding.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// check dependent flags
+		if deployment != "" && namespace == "" {
+			return fmt.Errorf("--deployment flag requires --namespace flag")
+		}
+
+		// check output format
+		outputFormatValid := false
+		for _, f := range getOutputFormats() {
+			if outputFormat == f {
+				outputFormatValid = true
+				break
+			}
+		}
+		if !outputFormatValid {
+			return fmt.Errorf("--output format must be one of %v", getOutputFormats())
+		}
+
+		// check prometheus URI
 		return parseRequiredUriFlag(&promUri, promUriString, "-p/--prometheus-url")
 	},
 	Run: runIgnite,
@@ -43,11 +75,19 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
+	rootCmd.PersistentFlags().SortFlags = false //TODO doesn't work
+
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.opsani-ignite.yaml)")
 
 	rootCmd.PersistentFlags().StringVarP(&promUriString, "prometheus-url", "p", "", "URI to Prometheus API (typically port-forwarded to localhost using kubectl)")
 	rootCmd.MarkPersistentFlagRequired("prometheus-url") // TODO: this doesn't seem to do anything, enforcing explicitly in parser function
 	viper.BindPFlag("prometheus-url", rootCmd.PersistentFlags().Lookup("prometheus-url"))
+
+	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Limit search to a namespace")
+	rootCmd.PersistentFlags().StringVarP(&deployment, "deployment", "d", "", "Limit search to a deployment name in namespace")
+
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", OUTPUT_TABLE, "Output format")
+
 }
 
 // initConfig reads in config file and ENV variables if set.

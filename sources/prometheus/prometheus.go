@@ -310,6 +310,7 @@ func mapNamespace(promApi v1.API, ctx context.Context, namespace model.LabelValu
 	for _, app := range apps {
 		warnings, err := collectDeploymentDetails(promApi, ctx, app, timeRange)
 		if len(warnings) > 0 {
+			fmt.Printf("Warnings: %v\n", warnings)
 		}
 		if err != nil {
 			fmt.Printf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
@@ -322,11 +323,80 @@ func mapNamespace(promApi v1.API, ctx context.Context, namespace model.LabelValu
 	return apps
 }
 
+func collectSingleApp(promApi v1.API, ctx context.Context, namespace string, timeRange v1.Range, workload string, workloadApiVersion string, workloadKind string) *appmodel.App {
+	app := &appmodel.App{
+		Metadata: appmodel.AppMetadata{
+			Namespace:          string(namespace),
+			Workload:           workload,
+			WorkloadKind:       workloadKind,
+			WorkloadApiVersion: workloadApiVersion,
+		}}
+
+	// TODO: check if the application exists, return if not
+	if false {
+		return nil
+	}
+
+	// Fill in deployment details
+	warnings, err := collectDeploymentDetails(promApi, ctx, app, timeRange)
+	if len(warnings) > 0 {
+		fmt.Printf("Warnings: %v\n", warnings)
+	}
+	if err != nil {
+		fmt.Printf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
+		app.Opportunity.Cons = append(app.Opportunity.Cons, fmt.Sprintf("Failed to collect deployment details: %v", err))
+	}
+
+	//fmt.Printf("%#v\n\n", app)
+
+	return app
+}
+
+// In parallel, collect the workloads in each namespace
+func collectMultipleApps(promApi v1.API, ctx context.Context, namespaces []model.LabelValue, timeRange v1.Range) []*appmodel.App {
+	// map applications in each namespace, in a goroutine per namespace
+	lists := make(chan []*appmodel.App)
+	var wg sync.WaitGroup
+	fmt.Printf("Discovered %v namespaces\n", len(namespaces))
+	wg.Add(len(namespaces))
+	for _, n := range namespaces {
+		go func(namespace model.LabelValue) {
+			defer wg.Done()
+			lists <- mapNamespace(promApi, ctx, namespace, timeRange)
+		}(n)
+	}
+
+	// collect apps into a single list, waiting for all namespaces to finish
+	finalList := make(chan []*appmodel.App)
+	go func() {
+		apps := make([]*appmodel.App, 0)
+		for list := range lists {
+			for _, app := range list {
+				//fmt.Printf("Reduced app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
+				apps = append(apps, app)
+			}
+		}
+		finalList <- apps
+	}()
+	wg.Wait()
+	close(lists)
+
+	// get list from parallel rendezvous (single element in the channel, containing the whole list)
+	apps := []*appmodel.App{}
+	for _, app := range <-finalList {
+		apps = append(apps, app)
+		//fmt.Printf("Found app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
+	}
+	close(finalList)
+
+	return apps
+}
+
 func Init() {
 	initializeTemplates()
 }
 
-func PromGetAll(promUri *url.URL) ([]*appmodel.App, error) {
+func PromGetAll(promUri *url.URL, namespace string, workload string, workloadApiVersion string, workloadKind string) ([]*appmodel.App, error) {
 	// set up API client
 	promApi, err := createAPI(promUri)
 	if err != nil {
@@ -342,46 +412,30 @@ func PromGetAll(promUri *url.URL) ([]*appmodel.App, error) {
 	}
 
 	// Collect namespaces
-	namespaces, warnings, err := collectNamespaces(promApi, timeRange)
-	if err != nil {
-		return nil, fmt.Errorf("Error querying Prometheus: %v\n", err)
-	}
-	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+	var namespaces []model.LabelValue
+	if namespace == "" {
+		var warnings v1.Warnings
+		var err error
+		namespaces, warnings, err = collectNamespaces(promApi, timeRange)
+		if err != nil {
+			return nil, fmt.Errorf("Error querying Prometheus: %v\n", err)
+		}
+		if len(warnings) > 0 {
+			fmt.Printf("Warnings: %v\n", warnings)
+		}
+	} else {
+		namespaces = []model.LabelValue{model.LabelValue(namespace)}
 	}
 	fmt.Printf("Namespaces:\n%v\n", namespaces)
 
-	// In parallel, collect the workloads in each namespace
-	ctx := context.Background() // TODO - improve, add useful context values
-	lists := make(chan []*appmodel.App)
-	var wg sync.WaitGroup
-	fmt.Printf("Discovered %v namespaces\n", len(namespaces))
-	wg.Add(len(namespaces))
-	for _, n := range namespaces {
-		go func(namespace model.LabelValue) {
-			defer wg.Done()
-			lists <- mapNamespace(promApi, ctx, namespace, timeRange)
-		}(n)
-	}
-	finalList := make(chan []*appmodel.App)
-	go func() {
-		apps := make([]*appmodel.App, 0)
-		for list := range lists {
-			for _, app := range list {
-				//fmt.Printf("Reduced app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
-				apps = append(apps, app)
-			}
+	var apps []*appmodel.App
+	if workload == "" {
+		apps = collectMultipleApps(promApi, context.Background(), namespaces, timeRange)
+	} else {
+		apps = []*appmodel.App{
+			collectSingleApp(promApi, context.Background(), namespace, timeRange, workload, workloadKind, workloadApiVersion),
 		}
-		finalList <- apps
-	}()
-	wg.Wait()
-	close(lists)
-	apps := []*appmodel.App{}
-	for _, app := range <-finalList {
-		apps = append(apps, app)
-		//fmt.Printf("Found app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
 	}
-	close(finalList)
 
 	return apps, nil
 }

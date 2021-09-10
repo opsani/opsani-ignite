@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -167,31 +168,7 @@ func analyzeApp(app *appmodel.App) {
 	app.Opportunity = o
 }
 
-func runIgnite(cmd *cobra.Command, args []string) {
-	fmt.Printf("Getting Prometheus metrics from %q\n", promUri)
-
-	prom.Init()
-	apps, err := prom.PromGetAll(promUri)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// analyze apps, assign rating and confidence (updates in place)
-	for _, app := range apps {
-		analyzeApp(app)
-	}
-
-	// sort table by opportunity
-	sort.Slice(apps, func(i, j int) bool {
-		return opportunitySorter(apps, i, j)
-	})
-
-	// --- Display applications in a table
-	// for _, app := range apps {
-	// 	fmt.Printf("%#v\n\n", app)
-	// }
-
+func displayAppsTable(apps []*appmodel.App) {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
@@ -224,4 +201,78 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	table.SetHeaderLine(false)
 	table.SetBorder(false)
 	table.Render()
+}
+
+func displayAppDetails(app *appmodel.App) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetCenterSeparator("")
+	table.SetColumnSeparator(":")
+	table.SetRowSeparator("")
+	table.SetHeaderLine(false)
+	table.SetBorder(false)
+
+	//blank := []string{""}
+	_, appColor := appReasonAndColor(app)
+	appColors := []tablewriter.Colors{[]int{0}, []int{appColor}}
+	prosColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
+	consColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgYellowColor}}
+	if app.Opportunity.Rating < 0 {
+		consColors = []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
+	}
+
+	table.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
+	table.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
+	table.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
+
+	table.Rich([]string{"Rating", fmt.Sprintf("%3d%%", app.Opportunity.Rating)}, appColors)
+	table.Rich([]string{"Confidence", fmt.Sprintf("%3d%%", app.Opportunity.Confidence)}, appColors)
+
+	//table.Rich(blank, nil)
+	table.Rich([]string{"Pros", strings.Join(app.Opportunity.Pros, "\n")}, prosColors)
+	table.Rich([]string{"Cons", strings.Join(app.Opportunity.Cons, "\n")}, consColors)
+
+	//table.Rich(blank, nil)
+	table.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.0f%%", app.Metrics.AverageReplicas)}, nil)
+	table.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
+	table.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
+
+	table.Render()
+}
+
+func runIgnite(cmd *cobra.Command, args []string) {
+	fmt.Printf("Getting Prometheus metrics from %q\n", promUri)
+
+	prom.Init()
+	apps, err := prom.PromGetAll(promUri, namespace, deployment, "apps/v1", "Deployment")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// analyze apps, assign rating and confidence (updates in place)
+	for _, app := range apps {
+		analyzeApp(app)
+	}
+
+	// sort table by opportunity
+	sort.Slice(apps, func(i, j int) bool {
+		return opportunitySorter(apps, i, j)
+	})
+
+	// --- Display applications in a table
+	// for _, app := range apps {
+	// 	fmt.Printf("%#v\n\n", app)
+	// }
+
+	switch outputFormat {
+	case OUTPUT_TABLE:
+		displayAppsTable(apps)
+	case OUTPUT_DETAIL:
+		for _, app := range apps {
+			displayAppDetails(app)
+			fmt.Println("")
+		}
+	default:
+		panic("unexpected output format")
+	}
 }

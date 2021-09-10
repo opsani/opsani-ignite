@@ -2,7 +2,7 @@ package model
 
 type AppMetadata struct {
 	//Cluster string // needed?
-	Name               string
+	//Name               string
 	Namespace          string
 	Workload           string
 	WorkloadKind       string
