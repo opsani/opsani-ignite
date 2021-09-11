@@ -19,6 +19,22 @@ import (
 	prom "opsani-ignite/sources/prometheus"
 )
 
+type AppTable struct {
+	tablewriter.Table // allows for adding methods locally
+}
+
+type DisplayMethods struct {
+	WriteHeader func(table *AppTable)
+	WriteApp    func(table *AppTable, app *appmodel.App)
+}
+
+func getDisplayMethods() map[string]DisplayMethods {
+	return map[string]DisplayMethods{
+		OUTPUT_TABLE:  {(*AppTable).outputTableHeader, (*AppTable).outputTableApp},
+		OUTPUT_DETAIL: {(*AppTable).outputDetailHeader, (*AppTable).outputDetailApp},
+	}
+}
+
 type ResourceUtilizationRating struct {
 	UtilizationFloor float64
 	RatingBump       int
@@ -101,7 +117,7 @@ func appReasonAndColor(app *appmodel.App) (string, int) {
 		} else {
 			reason = "n/a"
 		}
-		color = tablewriter.FgRedColor // 0 // keep default color (neutral)
+		color = 0 // keep default color (neutral); alt: tablewriter.FgRedColor
 	} else {
 		if len(app.Opportunity.Cons) > 0 {
 			reason = app.Opportunity.Cons[0]
@@ -168,50 +184,50 @@ func analyzeApp(app *appmodel.App) {
 	app.Opportunity = o
 }
 
-func displayAppsTable(apps []*appmodel.App) {
+func (table *AppTable) outputTableHeader() {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
-	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Replicas", "CPU", "Mem", "Reason"})
 	table.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
-	for _, app := range apps {
-		reason, color := appReasonAndColor(app)
-		rowValues := []string{
-			fmt.Sprintf("%d%%", app.Opportunity.Rating),
-			fmt.Sprintf("%d%%", app.Opportunity.Confidence),
-			app.Metadata.Namespace,
-			app.Metadata.Workload,
-			fmt.Sprintf("%.0f", app.Metrics.AverageReplicas),
-			fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
-			fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
-			reason,
-		}
-		cellColors := []int{color}
-		rowColors := make([]tablewriter.Colors, len(rowValues))
-		for i := range rowColors {
-			rowColors[i] = cellColors
-		}
-		table.Rich(rowValues, rowColors)
-	}
 	table.SetFooter([]string{})
 	table.SetCenterSeparator("")
 	table.SetColumnSeparator("")
 	table.SetRowSeparator("")
 	table.SetHeaderLine(false)
 	table.SetBorder(false)
-	table.Render()
 }
 
-func displayAppDetails(app *appmodel.App) {
-	table := tablewriter.NewWriter(os.Stdout)
+func (table *AppTable) outputTableApp(app *appmodel.App) {
+	reason, color := appReasonAndColor(app)
+	rowValues := []string{
+		fmt.Sprintf("%d%%", app.Opportunity.Rating),
+		fmt.Sprintf("%d%%", app.Opportunity.Confidence),
+		app.Metadata.Namespace,
+		app.Metadata.Workload,
+		fmt.Sprintf("%.0f", app.Metrics.AverageReplicas),
+		fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
+		fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
+		reason,
+	}
+	cellColors := []int{color}
+	rowColors := make([]tablewriter.Colors, len(rowValues))
+	for i := range rowColors {
+		rowColors[i] = cellColors
+	}
+	table.Rich(rowValues, rowColors)
+}
+
+func (table *AppTable) outputDetailHeader() {
 	table.SetCenterSeparator("")
 	table.SetColumnSeparator(":")
 	table.SetRowSeparator("")
 	table.SetHeaderLine(false)
 	table.SetBorder(false)
+}
 
-	//blank := []string{""}
+func (table *AppTable) outputDetailApp(app *appmodel.App) {
+	blank := []string{""}
 	_, appColor := appReasonAndColor(app)
 	appColors := []tablewriter.Colors{[]int{0}, []int{appColor}}
 	prosColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
@@ -236,7 +252,7 @@ func displayAppDetails(app *appmodel.App) {
 	table.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
 	table.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
 
-	table.Render()
+	table.Rich(blank, nil)
 }
 
 func runIgnite(cmd *cobra.Command, args []string) {
@@ -264,15 +280,21 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	// 	fmt.Printf("%#v\n\n", app)
 	// }
 
-	switch outputFormat {
-	case OUTPUT_TABLE:
-		displayAppsTable(apps)
-	case OUTPUT_DETAIL:
-		for _, app := range apps {
-			displayAppDetails(app)
-			fmt.Println("")
+	table := AppTable{*tablewriter.NewWriter(os.Stdout)}
+	skipped := 0
+	display := getDisplayMethods()[outputFormat]
+	display.WriteHeader(&table)
+	for _, app := range apps {
+		// skip unqualified apps (unless either -a flag or explicitly identified app)
+		if app.Opportunity.Rating < 0 && !showAllApps && deployment == "" {
+			skipped += 1
+			continue
 		}
-	default:
-		panic("unexpected output format")
+		display.WriteApp(&table, app)
 	}
+	table.Render()
+	if skipped > 0 {
+		fmt.Printf("\nNote: %v applications were skipped due to low rating. Use --show-all to see all apps\n", skipped)
+	}
+
 }

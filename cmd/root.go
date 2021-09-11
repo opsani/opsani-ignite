@@ -21,6 +21,7 @@ var promUri *url.URL
 var namespace string
 var deployment string
 var outputFormat string
+var showAllApps bool
 
 const (
 	OUTPUT_TABLE  = "table"
@@ -86,8 +87,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Limit search to a namespace")
 	rootCmd.PersistentFlags().StringVarP(&deployment, "deployment", "d", "", "Limit search to a deployment name in namespace")
 
+	rootCmd.PersistentFlags().BoolVarP(&showAllApps, "show-all", "a", false, "Show all apps, including unoptimizable")
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", OUTPUT_TABLE, "Output format")
-
 }
 
 // initConfig reads in config file and ENV variables if set.
