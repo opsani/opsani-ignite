@@ -2,6 +2,9 @@
 # Analysis sample output (temp)
 samples/
 
+# goreleaser files
+dist/
+
 # ---
 
 # Binaries for programs and plugins
@@ -19,3 +22,4 @@ samples/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
