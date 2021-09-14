@@ -17,6 +17,7 @@ import (
 	"text/template"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	//"github.com/prometheus/common/config"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -73,9 +74,9 @@ func createAPI(uri *url.URL) (v1.API, error) {
 	return v1.NewAPI(client), nil
 }
 
-func collectNamespaces(promApi v1.API, timeRange v1.Range) (model.LabelValues, v1.Warnings, error) {
+func collectNamespaces(ctx context.Context, promApi v1.API, timeRange v1.Range) (model.LabelValues, v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // TODO: fix constant
 	defer cancel()
 
 	// Collect namespaces
@@ -84,7 +85,7 @@ func collectNamespaces(promApi v1.API, timeRange v1.Range) (model.LabelValues, v
 		return nil, nil, fmt.Errorf("Error querying Prometheus: %v\n", err)
 	}
 	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+		log.Warnf("Warnings: %v\n", warnings)
 	}
 	namespaces := make([]model.LabelValue, 0, len(rawNamespaces))
 	for _, n := range rawNamespaces {
@@ -98,7 +99,7 @@ func collectNamespaces(promApi v1.API, timeRange v1.Range) (model.LabelValues, v
 	return namespaces, warnings, nil
 }
 
-func getAggregateMetric(promApi v1.API, ctx context.Context, app *appmodel.App, timeRange v1.Range, metric string, aggrFunc string) (*float64, v1.Warnings, error) {
+func getAggregateMetric(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, metric string, aggrFunc string) (*float64, v1.Warnings, error) {
 	// set up query context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
 	defer cancel()
@@ -113,10 +114,10 @@ func getAggregateMetric(promApi v1.API, ctx context.Context, app *appmodel.App, 
 		return nil, nil, fmt.Errorf("Error querying Prometheus for %q: %v\n", query, err)
 	}
 	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+		log.Warnf("Warnings: %v\n", warnings)
 	}
 
-	//fmt.Printf("Application %v:%v: query %v(%v):\n\t%T : %v\n\n", app.Metadata.Namespace, app.Metadata.Workload, aggrFunc, metric, result, result)
+	//log.Tracef("Application %v:%v: query %v(%v):\n\t%T : %v\n\n", app.Metadata.Namespace, app.Metadata.Workload, aggrFunc, metric, result, result)
 
 	// Parse results as a list of series
 	series, ok := result.(model.Matrix)
@@ -153,7 +154,7 @@ func getAggregateMetric(promApi v1.API, ctx context.Context, app *appmodel.App, 
 	return &value, warnings, nil
 }
 
-func getRangedMetric(promApi v1.API, ctx context.Context, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors) (*float64, v1.Warnings, error) {
+func getRangedMetric(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors) (*float64, v1.Warnings, error) {
 	// set up query context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
 	defer cancel()
@@ -172,10 +173,10 @@ func getRangedMetric(promApi v1.API, ctx context.Context, app *appmodel.App, tim
 		return nil, nil, fmt.Errorf("Error querying Prometheus for %q: %v\n", query, err)
 	}
 	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+		log.Warnf("Warnings: %v\n", warnings)
 	}
 
-	fmt.Printf("Application %v:%v: query %q:\n\t%T : %v\n\n", app.Metadata.Namespace, app.Metadata.Workload, query, result, result)
+	log.Tracef("Application %v:%v: query %q:\n\t%T : %v\n\n", app.Metadata.Namespace, app.Metadata.Workload, query, result, result)
 
 	// Parse results as a list of series
 	series, ok := result.(model.Matrix)
@@ -205,7 +206,7 @@ func getRangedMetric(promApi v1.API, ctx context.Context, app *appmodel.App, tim
 	return &value, warnings, nil
 }
 
-func collectDeploymentDetails(promApi v1.API, ctx context.Context, app *appmodel.App, timeRange v1.Range) (v1.Warnings, error) {
+func collectDeploymentDetails(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range) (v1.Warnings, error) {
 	allWarnings := v1.Warnings{}
 
 	// prepare query selectors
@@ -220,13 +221,13 @@ func collectDeploymentDetails(promApi v1.API, ctx context.Context, app *appmodel
 	}
 
 	// determine presence of writeable volumes
-	res, warnings, err := getAggregateMetric(promApi, ctx, app, timeRange, "kube_pod_spec_volumes_persistentvolumeclaims_readonly", "min")
+	res, warnings, err := getAggregateMetric(ctx, promApi, app, timeRange, "kube_pod_spec_volumes_persistentvolumeclaims_readonly", "min")
 	if err != nil {
-		fmt.Printf("Error querying Prometheus for volume access %v: %v\n", app.Metadata, err)
+		log.Errorf("Error querying Prometheus for volume access %v: %v\n", app.Metadata, err)
 	} else {
 		if len(warnings) > 0 {
 			allWarnings = append(allWarnings, warnings...)
-			fmt.Printf("Warnings during volume info collection: %v\n", warnings)
+			log.Warnf("Warnings during volume info collection: %v\n", warnings)
 		}
 		if res != nil && *res == 0 {
 			app.Settings.WriteableVolume = true
@@ -234,13 +235,13 @@ func collectDeploymentDetails(promApi v1.API, ctx context.Context, app *appmodel
 	}
 
 	// collect replicas
-	replicas, warnings, err := getRangedMetric(promApi, ctx, app, timeRange, replicaCountTemplate, &selectors)
+	replicas, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, replicaCountTemplate, &selectors)
 	if err != nil {
-		fmt.Printf("Error querying Prometheus for replica count %v: %v\n", app.Metadata, err)
+		log.Errorf("Error querying Prometheus for replica count %v: %v\n", app.Metadata, err)
 	} else {
 		if len(warnings) > 0 {
 			allWarnings = append(allWarnings, warnings...)
-			fmt.Printf("Warnings during replica counts: %v\n", warnings)
+			log.Warnf("Warnings during replica counts: %v\n", warnings)
 		}
 		if replicas != nil {
 			app.Metrics.AverageReplicas = *replicas
@@ -248,25 +249,25 @@ func collectDeploymentDetails(promApi v1.API, ctx context.Context, app *appmodel
 	}
 
 	// collect usage
-	cpu_used, warnings, err := getRangedMetric(promApi, ctx, app, timeRange, cpuUtilizationTemplate, &selectors)
+	cpu_used, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, cpuUtilizationTemplate, &selectors)
 	if err != nil {
-		fmt.Printf("Error querying Prometheus for CPU utilization %v: %v\n", app.Metadata, err)
+		log.Errorf("Error querying Prometheus for CPU utilization %v: %v\n", app.Metadata, err)
 	} else {
 		if len(warnings) > 0 {
 			allWarnings = append(allWarnings, warnings...)
-			fmt.Printf("Warnings during cpu utilization collection: %v\n", warnings)
+			log.Warnf("Warnings during cpu utilization collection: %v\n", warnings)
 		}
 		if cpu_used != nil {
 			app.Metrics.CpuUtilization = *cpu_used
 		}
 	}
-	memory_used, warnings, err := getRangedMetric(promApi, ctx, app, timeRange, memoryUtilizationTemplate, &selectors)
+	memory_used, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, memoryUtilizationTemplate, &selectors)
 	if err != nil {
-		fmt.Printf("Error querying Prometheus for memory utilization %v: %v\n", app.Metadata, err)
+		log.Errorf("Error querying Prometheus for memory utilization %v: %v\n", app.Metadata, err)
 	} else {
 		if len(warnings) > 0 {
 			allWarnings = append(allWarnings, warnings...)
-			fmt.Printf("Warnings during memory utilization collection: %v\n", warnings)
+			log.Warnf("Warnings during memory utilization collection: %v\n", warnings)
 		}
 		if memory_used != nil {
 			app.Metrics.MemoryUtilization = *memory_used
@@ -276,7 +277,7 @@ func collectDeploymentDetails(promApi v1.API, ctx context.Context, app *appmodel
 	return allWarnings, nil
 }
 
-func mapNamespace(promApi v1.API, ctx context.Context, namespace model.LabelValue, timeRange v1.Range) (apps []*appmodel.App) {
+func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValue, timeRange v1.Range) (apps []*appmodel.App) {
 	apps = []*appmodel.App{}
 
 	// set up query context with timeout
@@ -287,43 +288,43 @@ func mapNamespace(promApi v1.API, ctx context.Context, namespace model.LabelValu
 	// TODO: consider santizing namespace value despite using %q and model.LabelValue
 	result, warnings, err := promApi.Query(reqCtx, fmt.Sprintf("kube_deployment_labels{namespace=%q}", namespace), timeRange.End)
 	if err != nil {
-		fmt.Print(fmt.Errorf("Error querying Prometheus for namespace %q: %v\n", namespace, err))
+		log.Errorf("Error querying Prometheus for namespace %q: %v\n", namespace, err)
 		return
 	}
 	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+		log.Warnf("Warnings: %v\n", warnings)
 	}
 
 	// Collect deployments
 	samples, ok := result.(model.Vector)
 	if !ok {
-		fmt.Printf("Unexpected deployment query result: got type %T, expected Vector", result)
+		log.Errorf("Unexpected deployment query result: got type %T, expected Vector", result)
 		return
 	}
 	for _, w := range samples {
 		workload := w.Metric["deployment"]
 		apps = append(apps, &appmodel.App{Metadata: appmodel.AppMetadata{Namespace: string(namespace), Workload: string(workload), WorkloadKind: "Deployment", WorkloadApiVersion: "apps/v1"}})
-		//fmt.Printf("namespace %q: deployment %q\n", namespace, workload)
+		//log.Tracef("namespace %q: deployment %q\n", namespace, workload)
 	}
 
 	// Fill in deployment details
 	for _, app := range apps {
-		warnings, err := collectDeploymentDetails(promApi, ctx, app, timeRange)
+		warnings, err := collectDeploymentDetails(ctx, promApi, app, timeRange)
 		if len(warnings) > 0 {
-			fmt.Printf("Warnings: %v\n", warnings)
+			log.Warnf("Warnings: %v\n", warnings)
 		}
 		if err != nil {
-			fmt.Printf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
+			log.Errorf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
 			app.Opportunity.Cons = append(app.Opportunity.Cons, fmt.Sprintf("Failed to collect deployment details: %v", err))
 		}
 
-		//fmt.Printf("%#v\n\n", app)
+		//log.Tracef("%#v\n\n", app)
 	}
 
 	return apps
 }
 
-func collectSingleApp(promApi v1.API, ctx context.Context, namespace string, timeRange v1.Range, workload string, workloadApiVersion string, workloadKind string) *appmodel.App {
+func collectSingleApp(ctx context.Context, promApi v1.API, namespace string, timeRange v1.Range, workload string, workloadApiVersion string, workloadKind string) *appmodel.App {
 	app := &appmodel.App{
 		Metadata: appmodel.AppMetadata{
 			Namespace:          string(namespace),
@@ -338,31 +339,30 @@ func collectSingleApp(promApi v1.API, ctx context.Context, namespace string, tim
 	}
 
 	// Fill in deployment details
-	warnings, err := collectDeploymentDetails(promApi, ctx, app, timeRange)
+	warnings, err := collectDeploymentDetails(ctx, promApi, app, timeRange)
 	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+		log.Warnf("Warnings: %v\n", warnings)
 	}
 	if err != nil {
-		fmt.Printf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
+		log.Errorf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
 		app.Opportunity.Cons = append(app.Opportunity.Cons, fmt.Sprintf("Failed to collect deployment details: %v", err))
 	}
 
-	//fmt.Printf("%#v\n\n", app)
+	//log.Tracef("%#v\n\n", app)
 
 	return app
 }
 
 // In parallel, collect the workloads in each namespace
-func collectMultipleApps(promApi v1.API, ctx context.Context, namespaces []model.LabelValue, timeRange v1.Range) []*appmodel.App {
+func collectMultipleApps(ctx context.Context, promApi v1.API, namespaces []model.LabelValue, timeRange v1.Range) []*appmodel.App {
 	// map applications in each namespace, in a goroutine per namespace
 	lists := make(chan []*appmodel.App)
 	var wg sync.WaitGroup
-	fmt.Printf("Discovered %v namespaces\n", len(namespaces))
 	wg.Add(len(namespaces))
 	for _, n := range namespaces {
 		go func(namespace model.LabelValue) {
 			defer wg.Done()
-			lists <- mapNamespace(promApi, ctx, namespace, timeRange)
+			lists <- mapNamespace(ctx, promApi, namespace, timeRange)
 		}(n)
 	}
 
@@ -372,7 +372,7 @@ func collectMultipleApps(promApi v1.API, ctx context.Context, namespaces []model
 		apps := make([]*appmodel.App, 0)
 		for list := range lists {
 			for _, app := range list {
-				//fmt.Printf("Reduced app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
+				//log.Tracef("Reduced app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
 				apps = append(apps, app)
 			}
 		}
@@ -385,7 +385,7 @@ func collectMultipleApps(promApi v1.API, ctx context.Context, namespaces []model
 	apps := []*appmodel.App{}
 	for _, app := range <-finalList {
 		apps = append(apps, app)
-		//fmt.Printf("Found app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
+		//log.Tracef("Found app %v:%v\n", app.Metadata.Namespace, app.Metadata.Workload)
 	}
 	close(finalList)
 
@@ -396,7 +396,7 @@ func Init() {
 	initializeTemplates()
 }
 
-func PromGetAll(promUri *url.URL, namespace string, workload string, workloadApiVersion string, workloadKind string) ([]*appmodel.App, error) {
+func PromGetAll(ctx context.Context, promUri *url.URL, namespace string, workload string, workloadApiVersion string, workloadKind string) ([]*appmodel.App, error) {
 	// set up API client
 	promApi, err := createAPI(promUri)
 	if err != nil {
@@ -416,24 +416,24 @@ func PromGetAll(promUri *url.URL, namespace string, workload string, workloadApi
 	if namespace == "" {
 		var warnings v1.Warnings
 		var err error
-		namespaces, warnings, err = collectNamespaces(promApi, timeRange)
+		namespaces, warnings, err = collectNamespaces(ctx, promApi, timeRange)
 		if err != nil {
 			return nil, fmt.Errorf("Error querying Prometheus: %v\n", err)
 		}
 		if len(warnings) > 0 {
-			fmt.Printf("Warnings: %v\n", warnings)
+			log.Warnf("Warnings: %v\n", warnings)
 		}
 	} else {
 		namespaces = []model.LabelValue{model.LabelValue(namespace)}
 	}
-	fmt.Printf("Namespaces:\n%v\n", namespaces)
+	log.Tracef("Namespaces: %v", namespaces)
 
 	var apps []*appmodel.App
 	if workload == "" {
-		apps = collectMultipleApps(promApi, context.Background(), namespaces, timeRange)
+		apps = collectMultipleApps(ctx, promApi, namespaces, timeRange)
 	} else {
 		apps = []*appmodel.App{
-			collectSingleApp(promApi, context.Background(), namespace, timeRange, workload, workloadKind, workloadApiVersion),
+			collectSingleApp(ctx, promApi, namespace, timeRange, workload, workloadKind, workloadApiVersion),
 		}
 	}
 

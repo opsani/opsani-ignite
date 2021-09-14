@@ -6,10 +6,12 @@ This file is part of https://github.com/opsani/opsani-ignite
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	appmodel "opsani-ignite/app/model"
@@ -49,20 +51,29 @@ func isQualifiedApp(app *appmodel.App) bool {
 }
 
 func runIgnite(cmd *cobra.Command, args []string) {
-	fmt.Printf("Using Prometheus API at %q\n", promUri)
+	if showDebug {
+		log.SetLevel(log.TraceLevel)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
+
+	log.Printf("Using Prometheus API at %q\n", promUri)
+
+	// Create root context
+	ctx := context.Background()
 
 	// get applications from the cluster
 	prom.Init()
-	apps, err := prom.PromGetAll(promUri, namespace, deployment, "apps/v1", "Deployment")
+	apps, err := prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment")
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "Failed to obtain data from Prometheus at %q: %v", promUri, err)
 		os.Exit(1)
 	}
 	if len(apps) == 0 {
 		if deployment == "" {
-			fmt.Printf("No applications found. Try specifying explicit --namespace and, optionally, --deployment to analyze")
+			fmt.Fprintf(os.Stderr, "No applications found. Try specifying explicit --namespace and, optionally, --deployment to analyze")
 		} else {
-			fmt.Printf("Application %q not found in namespace %q", deployment, namespace)
+			fmt.Fprintf(os.Stderr, "Application %q not found in namespace %q", deployment, namespace)
 		}
 		return
 	}
@@ -90,9 +101,9 @@ func runIgnite(cmd *cobra.Command, args []string) {
 				qualified += 1
 			}
 		}
-		if qualified == 0 {
+		if qualified == 0 && deployment == "" { // if a deployment is specified, it will be shown anyway
 			showAllApps = true
-			fmt.Printf("\nNote: no highly rated applications found. Showing all applications\n\n")
+			log.Infof("No highly rated applications found. Showing all applications")
 		}
 	}
 
@@ -109,9 +120,11 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		}
 		display.WriteApp(table, app)
 	}
+	fmt.Println("")
 	table.Render()
+	fmt.Println("")
 	if skipped > 0 {
-		fmt.Printf("\nNote: %v applications were not shown due to low rating. Use --show-all to see all apps\n", skipped)
+		log.Infof("%v applications were not shown due to low rating. Use --show-all to see all apps", skipped)
 	}
 
 }

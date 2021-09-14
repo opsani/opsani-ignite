@@ -22,6 +22,7 @@ var namespace string
 var deployment string
 var outputFormat string
 var showAllApps bool
+var showDebug bool
 
 const (
 	OUTPUT_TABLE  = "table"
@@ -87,8 +88,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Limit search to a namespace")
 	rootCmd.PersistentFlags().StringVarP(&deployment, "deployment", "d", "", "Limit search to a deployment name in namespace")
 
-	rootCmd.PersistentFlags().BoolVarP(&showAllApps, "show-all", "a", false, "Show all apps, including unoptimizable")
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", OUTPUT_TABLE, "Output format")
+	rootCmd.PersistentFlags().BoolVarP(&showAllApps, "show-all", "a", false, "Show all apps, including unoptimizable")
+	rootCmd.PersistentFlags().BoolVar(&showDebug, "debug", false, "Display tracing/debug information to stderr")
 }
 
 // initConfig reads in config file and ENV variables if set.
