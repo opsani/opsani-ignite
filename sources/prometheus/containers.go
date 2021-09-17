@@ -103,6 +103,8 @@ func getContainersUse(ctx context.Context, promApi v1.API, app *appmodel.App, ti
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
 	defer cancel()
 
+	var allWarnings v1.Warnings
+
 	// prepare query string by injecting selector data into the provided query template
 	var buf bytes.Buffer
 	err := queryTemplate.Execute(&buf, querySelectors)
@@ -118,6 +120,7 @@ func getContainersUse(ctx context.Context, promApi v1.API, app *appmodel.App, ti
 	}
 	if len(warnings) > 0 {
 		log.Warnf("Warnings: %v\n", warnings)
+		allWarnings = append(allWarnings, warnings...)
 	}
 
 	// Parse results as a list of series
@@ -131,20 +134,39 @@ func getContainersUse(ctx context.Context, promApi v1.API, app *appmodel.App, ti
 
 	// aggregate and distribute values by container name
 	valueMap := make(map[string]float64, len(app.Containers))
-	for _, c := range series {
+	for _, c := range series { // c is *model.SampleStream
+		if len(c.Metric) > 1 {
+			log.Warningf("metrics returned for query %q contain labels %v, expected %v, ignoring extras (app %v)", query, c.Metric, []string{"container"}, app.Metadata)
+		}
+		if len(c.Metric) == 0 {
+			//log.Tracef("(expected) skipping metrics for without labels for app %v, query %q", app.Metadata, query)
+			continue
+		}
 		// extract container name
 		name, ok := c.Metric["container"]
 		if !ok {
-			log.Errorf("metric returned for query %q does not container the %q label for app %v, required; skipping series ", query, "container", app.Metadata)
+			log.Errorf("metric returned for query %q does not contain the %q label for app %v, required; skipping series ", query, "container", app.Metadata)
 			continue
 		}
 		if name == "" || name == "POD" {
-			log.Tracef("skipping metrics for container label value %q for app %v, query %q", name, app.Metadata, query)
+			//log.Tracef("(expected) skipping metrics for container label value %q for app %v, query %q", name, app.Metadata, query)
 			continue
 		}
-		if len(c.Metric) > 1 {
-			log.Warningf("metrics returned for query %q contain labels %v, expected %v(%v), ignoring extras (app %v)", query, c.Metric, []string{"container"}, name, app.Metadata)
+
+		// process statistics over the values
+		value, warnigns, err := valueFromSamplePairs(c.Values, fmt.Sprintf("app %v, container %q, query %q", app.Metadata, name, query))
+		if err != nil {
+			// convert to warning
+			msg := fmt.Sprintf("Failed statistical processing for app %v, container %q, query %q results: %v; skipping series", app.Metadata, name, query, err)
+			warnings = append(warnigns, msg)
+			allWarnings = append(allWarnings, warnigns...)
+			log.Errorf("%v", msg)
+			continue
 		}
+		if len(warnigns) > 0 {
+			allWarnings = append(allWarnings, warnings...)
+		}
+		valueMap[string(name)] = value
 	}
 
 	return valueMap, warnings, nil
@@ -222,8 +244,80 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 	}
 
 	// Get CPU resource usage
+	valueMap, warnings, err := getContainersUse(ctx, promApi, app, timeRange, containerCpuUseTemplate, &selectors)
+	if err != nil {
+		log.Errorf("Error querying Prometheus for container CPU usage %v: %v", app.Metadata, err)
+	} else {
+		if len(warnings) > 0 {
+			allWarnings = append(allWarnings, warnings...)
+			log.Warnf("Warnings during container CPU usage collection: %v", warnings)
+		}
+		// distribute values
+		for i := range app.Containers {
+			contName := app.Containers[i].Name
+			v, ok := valueMap[contName]
+			if !ok {
+				log.Warnf("Didn't find value of CPU usage for container %q of app %v; assuming 0", contName, app.Metadata)
+			} else {
+				app.Containers[i].Cpu.Usage = v
+				delete(valueMap, contName)
+			}
+		}
+		if len(valueMap) > 0 {
+			log.Warnf("Unexpected container series for CPU usage (app %v): %v; ignoring", app.Metadata, valueMap)
+		}
+
+	}
 
 	// Get memory resource usage
+	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerMemoryUseTemplate, &selectors)
+	if err != nil {
+		log.Errorf("Error querying Prometheus for container memory usage %v: %v", app.Metadata, err)
+	} else {
+		if len(warnings) > 0 {
+			allWarnings = append(allWarnings, warnings...)
+			log.Warnf("Warnings during container memory usage collection: %v", warnings)
+		}
+		// distribute values
+		for i := range app.Containers {
+			contName := app.Containers[i].Name
+			v, ok := valueMap[contName]
+			if !ok {
+				log.Warnf("Didn't find value of memory usage for container %q of app %v; assuming 0", contName, app.Metadata)
+			} else {
+				app.Containers[i].Memory.Usage = v
+				delete(valueMap, contName)
+			}
+		}
+		if len(valueMap) > 0 {
+			log.Warnf("Unexpected container series for memory usage (app %v): %v; ignoring", app.Metadata, valueMap)
+		}
+	}
+
+	// Get restart counts
+	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerRestartsTemplate, &selectors)
+	if err != nil {
+		log.Errorf("Error querying Prometheus for container restarts %v: %v", app.Metadata, err)
+	} else {
+		if len(warnings) > 0 {
+			allWarnings = append(allWarnings, warnings...)
+			log.Warnf("Warnings during container restarts collection: %v", warnings)
+		}
+		// distribute values
+		for i := range app.Containers {
+			contName := app.Containers[i].Name
+			v, ok := valueMap[contName]
+			if !ok {
+				log.Warnf("Didn't find value of restarts for container %q of app %v; assuming 0", contName, app.Metadata)
+			} else {
+				app.Containers[i].RestartCount = v
+				delete(valueMap, contName)
+			}
+		}
+		if len(valueMap) > 0 {
+			log.Warnf("Unexpected container series for restarts (app %v): %v; ignoring", app.Metadata, valueMap)
+		}
+	}
 
 	log.Tracef("App %v has %v container(s): %v", app.Metadata, len(app.Containers), app.Containers)
 

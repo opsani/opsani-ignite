@@ -12,6 +12,7 @@ var containerResourceRequestsTemplate *template.Template
 var containerResourceLimitsTemplate *template.Template
 var containerCpuUseTemplate *template.Template
 var containerMemoryUseTemplate *template.Template
+var containerRestartsTemplate *template.Template
 
 // CPU and memory saturation references:
 //   https://blog.freshtracks.io/a-deep-dive-into-kubernetes-metrics-part-3-container-resource-metrics-361c5ee46e66
@@ -49,7 +50,7 @@ func initializeTemplates() {
 	// TODO (e.g., oom kill count, maybe from kube_pod_container_status_terminated_reason)
 
 	// container restarts
-	containerMemoryUseTemplate = template.Must(template.New("prometheusContainerMemoryUseTemplate").Parse(
+	containerRestartsTemplate = template.Must(template.New("prometheusRestartsTemplate").Parse(
 		`avg by (container) (kube_pod_container_status_restarts_total{ {{ .PodSelector }} })`))
 
 	/*
