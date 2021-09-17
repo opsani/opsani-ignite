@@ -72,7 +72,7 @@ func (table *AppTable) outputTableHeader() {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
-	table.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Replicas", "CPU", "Mem", "Reason"})
+	table.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Instances", "CPU", "Mem", "Reason"})
 	table.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
 	table.SetFooter([]string{})
 	table.SetCenterSeparator("")
@@ -89,7 +89,7 @@ func (table *AppTable) outputTableApp(app *appmodel.App) {
 		fmt.Sprintf("%d%%", app.Opportunity.Confidence),
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
-		fmt.Sprintf("%.0f", app.Metrics.AverageReplicas),
+		fmt.Sprintf("%.0fx%d", app.Metrics.AverageReplicas, len(app.Containers)),
 		fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
 		fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
 		reason,
@@ -108,6 +108,7 @@ func (table *AppTable) outputDetailHeader() {
 	table.SetRowSeparator("")
 	table.SetHeaderLine(false)
 	table.SetBorder(false)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
 }
 
 func (table *AppTable) outputDetailApp(app *appmodel.App) {
@@ -124,8 +125,8 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	table.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
 	table.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
 
-	table.Rich([]string{"Rating", fmt.Sprintf("%3d%%", app.Opportunity.Rating)}, appColors)
-	table.Rich([]string{"Confidence", fmt.Sprintf("%3d%%", app.Opportunity.Confidence)}, appColors)
+	table.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Opportunity.Rating)}, appColors)
+	table.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Opportunity.Confidence)}, appColors)
 
 	//table.Rich(blank, nil)
 	if len(app.Opportunity.Pros) > 0 {
@@ -137,6 +138,7 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 
 	//table.Rich(blank, nil)
 	table.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.0f%%", app.Metrics.AverageReplicas)}, nil)
+	table.Rich([]string{"Container Count", fmt.Sprintf("%3d", len(app.Containers))}, nil)
 	table.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
 	table.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
 

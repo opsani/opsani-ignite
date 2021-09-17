@@ -241,10 +241,21 @@ func collectDeploymentDetails(ctx context.Context, promApi v1.API, app *appmodel
 	} else {
 		if len(warnings) > 0 {
 			allWarnings = append(allWarnings, warnings...)
-			log.Warnf("Warnings during replica counts: %v\n", warnings)
+			log.Warnf("Warnings during replica counts collection: %v\n", warnings)
 		}
 		if replicas != nil {
 			app.Metrics.AverageReplicas = *replicas
+		}
+	}
+
+	// collect container info
+	warnings, err = collectContainersInfo(ctx, promApi, app, timeRange)
+	if err != nil {
+		log.Errorf("Error querying Prometheus for workload's containers info %v: %v\n", app.Metadata, err)
+	} else {
+		if len(warnings) > 0 {
+			allWarnings = append(allWarnings, warnings...)
+			log.Warnf("Warnings during workload's container info collection: %v\n", warnings)
 		}
 	}
 
