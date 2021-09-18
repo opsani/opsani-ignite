@@ -27,12 +27,12 @@ var showDebug bool
 const (
 	OUTPUT_TABLE  = "table"
 	OUTPUT_DETAIL = "detail"
-	// TODO: add JSON and YAML
+	OUTPUT_YAML   = "yaml"
 )
 
 // constant table - format types, keep in sync with OUTPUT_xxx constants above
 func getOutputFormats() []string {
-	return []string{OUTPUT_TABLE, OUTPUT_DETAIL}
+	return []string{OUTPUT_TABLE, OUTPUT_DETAIL, OUTPUT_YAML}
 }
 
 // rootCmd represents the base command when called without any subcommands

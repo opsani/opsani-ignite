@@ -11,13 +11,14 @@ type AppMetadata struct {
 }
 
 type AppSettings struct {
-	Replicas        int
-	HpaEnabled      bool
-	VpaEnabled      bool
-	MpaEnabled      bool
-	HpaMinReplicas  int
-	HpaMaxReplicas  int
-	WriteableVolume bool
+	Replicas        int    `yaml:"-"`
+	HpaEnabled      bool   `yaml:"-"`
+	VpaEnabled      bool   `yaml:"-"`
+	MpaEnabled      bool   `yaml:"-"`
+	HpaMinReplicas  int    `yaml:"-"`
+	HpaMaxReplicas  int    `yaml:"-"`
+	WriteableVolume bool   `yaml:"writeable_volume"`
+	QosClass        string `yaml:"qos_class"`
 	// TODO: consider adding replicas stats (min/max/avg/median)
 }
 
@@ -30,36 +31,36 @@ type AppContainerResourceInfo struct {
 }
 
 type AppContainer struct {
-	Name string
+	Name string `yaml:"name"`
 	Cpu  struct {
-		AppContainerResourceInfo
-		SecondsThrottled float64 // average rate across instances/time
-		Shares           float64 // alt source for Cpu.Request, in CPU shares (1000-1024 per core)
-	}
+		AppContainerResourceInfo `yaml:"resource"`
+		SecondsThrottled         float64 `yaml:"seconds_throttled"` // average rate across instances/time
+		Shares                   float64 `yaml:"shares"`            // alt source for Cpu.Request, in CPU shares (1000-1024 per core)
+	} `yaml:"cpu"`
 	Memory struct {
-		AppContainerResourceInfo
-	}
-	RestartCount float64
+		AppContainerResourceInfo `yaml:"resource"`
+	} `yaml:"memory"`
+	RestartCount float64 `yaml:"restart_count"` // yaml: don't omit empty, since 0 is a valid value
 }
 
 type AppMetrics struct {
-	AverageReplicas   float64
-	CpuUtilization    float64 // aka Saturation, %
-	MemoryUtilization float64
+	AverageReplicas   float64 `yaml:"average_replicas"`
+	CpuUtilization    float64 `yaml:"cpu_saturation"` // aka Saturation, %
+	MemoryUtilization float64 `yaml:"memory_saturation"`
 	// TODO: add network traffic, esp. indication of traffic
 }
 
 type AppOpportunity struct {
-	Rating     int      // how suitable for optimization
-	Confidence int      // how confident is the rating
-	Pros       []string // list of pros for optimization
-	Cons       []string // list of cons for optimizatoin
+	Rating     int      `yaml:"rating"`     // how suitable for optimization
+	Confidence int      `yaml:"confidence"` // how confident is the rating
+	Pros       []string `yaml:"pros"`       // list of pros for optimization
+	Cons       []string `yaml:"cons"`       // list of cons for optimizatoin
 }
 
 type App struct {
-	Metadata    AppMetadata
-	Settings    AppSettings
-	Containers  []AppContainer
-	Metrics     AppMetrics
-	Opportunity AppOpportunity
+	Metadata    AppMetadata    `yaml:"metadata"`
+	Settings    AppSettings    `yaml:"settings"`
+	Containers  []AppContainer `yaml:"containers"`
+	Metrics     AppMetrics     `yaml:"metrics"`
+	Opportunity AppOpportunity `yaml:"analysis"`
 }

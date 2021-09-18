@@ -8,25 +8,32 @@ package cmd
 import (
 	"fmt"
 	"io"
-	appmodel "opsani-ignite/app/model"
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
+
+	appmodel "opsani-ignite/app/model"
 )
 
 type AppTable struct {
-	tablewriter.Table // allows for adding methods locally
+	wr   io.Writer
+	t    tablewriter.Table // table writer, if used
+	yaml *yaml.Encoder     // yaml encoder, if used
 }
 
 type DisplayMethods struct {
 	WriteHeader func(table *AppTable)
 	WriteApp    func(table *AppTable, app *appmodel.App)
+	WriteOut    func(table *AppTable)
 }
 
 func getDisplayMethods() map[string]DisplayMethods {
 	return map[string]DisplayMethods{
-		OUTPUT_TABLE:  {(*AppTable).outputTableHeader, (*AppTable).outputTableApp},
-		OUTPUT_DETAIL: {(*AppTable).outputDetailHeader, (*AppTable).outputDetailApp},
+		OUTPUT_TABLE:  {(*AppTable).outputTableHeader, (*AppTable).outputTableApp, (*AppTable).outputAnyTableOut},
+		OUTPUT_DETAIL: {(*AppTable).outputDetailHeader, (*AppTable).outputDetailApp, (*AppTable).outputAnyTableOut},
+		OUTPUT_YAML:   {(*AppTable).outputYamlHeader, (*AppTable).outputYamlApp, (*AppTable).outputYamlOut},
 	}
 }
 
@@ -72,14 +79,14 @@ func (table *AppTable) outputTableHeader() {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
-	table.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Instances", "CPU", "Mem", "Reason"})
-	table.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
-	table.SetFooter([]string{})
-	table.SetCenterSeparator("")
-	table.SetColumnSeparator("")
-	table.SetRowSeparator("")
-	table.SetHeaderLine(false)
-	table.SetBorder(false)
+	table.t.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Instances", "CPU", "Mem", "Reason"})
+	table.t.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
+	table.t.SetFooter([]string{})
+	table.t.SetCenterSeparator("")
+	table.t.SetColumnSeparator("")
+	table.t.SetRowSeparator("")
+	table.t.SetHeaderLine(false)
+	table.t.SetBorder(false)
 }
 
 func (table *AppTable) outputTableApp(app *appmodel.App) {
@@ -99,16 +106,16 @@ func (table *AppTable) outputTableApp(app *appmodel.App) {
 	for i := range rowColors {
 		rowColors[i] = cellColors
 	}
-	table.Rich(rowValues, rowColors)
+	table.t.Rich(rowValues, rowColors)
 }
 
 func (table *AppTable) outputDetailHeader() {
-	table.SetCenterSeparator("")
-	table.SetColumnSeparator(":")
-	table.SetRowSeparator("")
-	table.SetHeaderLine(false)
-	table.SetBorder(false)
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.t.SetCenterSeparator("")
+	table.t.SetColumnSeparator(":")
+	table.t.SetRowSeparator("")
+	table.t.SetHeaderLine(false)
+	table.t.SetBorder(false)
+	table.t.SetAlignment(tablewriter.ALIGN_LEFT)
 }
 
 func (table *AppTable) outputDetailApp(app *appmodel.App) {
@@ -121,30 +128,51 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 		consColors = []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
 	}
 
-	table.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
-	table.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
-	table.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
+	table.t.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
+	table.t.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
+	table.t.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
 
-	table.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Opportunity.Rating)}, appColors)
-	table.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Opportunity.Confidence)}, appColors)
+	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Opportunity.Rating)}, appColors)
+	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Opportunity.Confidence)}, appColors)
 
 	//table.Rich(blank, nil)
 	if len(app.Opportunity.Pros) > 0 {
-		table.Rich([]string{"Pros", strings.Join(app.Opportunity.Pros, "\n")}, prosColors)
+		table.t.Rich([]string{"Pros", strings.Join(app.Opportunity.Pros, "\n")}, prosColors)
 	}
 	if len(app.Opportunity.Cons) > 0 {
-		table.Rich([]string{"Cons", strings.Join(app.Opportunity.Cons, "\n")}, consColors)
+		table.t.Rich([]string{"Cons", strings.Join(app.Opportunity.Cons, "\n")}, consColors)
 	}
 
 	//table.Rich(blank, nil)
-	table.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.0f%%", app.Metrics.AverageReplicas)}, nil)
-	table.Rich([]string{"Container Count", fmt.Sprintf("%3d", len(app.Containers))}, nil)
-	table.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
-	table.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
+	table.t.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.0f%%", app.Metrics.AverageReplicas)}, nil)
+	table.t.Rich([]string{"Container Count", fmt.Sprintf("%3d", len(app.Containers))}, nil)
+	table.t.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
+	table.t.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
 
-	table.Rich(blank, nil)
+	table.t.Rich(blank, nil)
+}
+
+func (table *AppTable) outputAnyTableOut() {
+	fmt.Println("")
+	table.t.Render()
+	fmt.Println("")
+}
+
+func (table *AppTable) outputYamlHeader() {
+	table.yaml = yaml.NewEncoder(table.wr)
+}
+
+func (table *AppTable) outputYamlApp(app *appmodel.App) {
+	err := table.yaml.Encode(*app)
+	if err != nil {
+		log.Errorf("Failed to write app %v to yaml: %v", app.Metadata, err)
+	}
+}
+
+func (table *AppTable) outputYamlOut() {
+	table.yaml.Close()
 }
 
 func newAppTable(wr io.Writer) *AppTable {
-	return &AppTable{*tablewriter.NewWriter(wr)}
+	return &AppTable{wr, *tablewriter.NewWriter(wr), nil}
 }

@@ -222,7 +222,10 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 		if len(labels) != 1 || !ok {
 			return warnings, fmt.Errorf("Query %q returned labels %v, expected %v", query, labels, []string{"container"})
 		}
-		app.Containers = append(app.Containers, appmodel.AppContainer{Name: string(name)})
+		container := appmodel.AppContainer{Name: string(name)}
+		container.Cpu.Unit = "cores"
+		container.Memory.Unit = "bytes"
+		app.Containers = append(app.Containers, container)
 	}
 
 	// Get resource requests

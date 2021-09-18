@@ -120,9 +120,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		}
 		display.WriteApp(table, app)
 	}
-	fmt.Println("")
-	table.Render()
-	fmt.Println("")
+	display.WriteOut(table)
 	if skipped > 0 {
 		log.Infof("%v applications were not shown due to low rating. Use --show-all to see all apps", skipped)
 	}
