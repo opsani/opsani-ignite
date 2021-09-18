@@ -98,7 +98,7 @@ func getContainersResources(ctx context.Context, promApi v1.API, app *appmodel.A
 	return nil, nil
 }
 
-func getContainersUse(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors) (map[string]float64, v1.Warnings, error) {
+func getContainersUseValueMap(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors) (map[string]float64, v1.Warnings, error) {
 	// set up query context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
 	defer cancel()
@@ -172,12 +172,65 @@ func getContainersUse(ctx context.Context, promApi v1.API, app *appmodel.App, ti
 	return valueMap, warnings, nil
 }
 
+func getContainersUse(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors, resource string, field string) (v1.Warnings, error) {
+	// get container usage metric into valuemap by container name
+	valueMap, warnings, err := getContainersUseValueMap(ctx, promApi, app, timeRange, queryTemplate, querySelectors)
+	if err != nil {
+		return warnings, err
+	}
+
+	// distribute values
+	for i := range app.Containers {
+		contName := app.Containers[i].Name
+		v, ok := valueMap[contName]
+		if !ok {
+			if field != "SecondsThrottled" { // seconds throttled may be undefined if no throttling has occurred
+				log.Warnf("Didn't find value of %v.%v for container %q of app %v; assuming 0", resource, field, contName, app.Metadata)
+			}
+		} else {
+			// app.Containers[i].<resource>.<field> = v
+			containerStruct := reflect.ValueOf(&app.Containers[i]).Elem()
+			var resourceValue reflect.Value
+			if resource != "" {
+				resourceStruct := containerStruct.FieldByName(strings.Title(resource))
+				resourceValue = resourceStruct.FieldByName(field)
+			} else {
+				resourceValue = containerStruct.FieldByName(field)
+			}
+			resourceValue.Set(reflect.ValueOf(v))
+
+			delete(valueMap, contName)
+		}
+	}
+	if len(valueMap) > 0 {
+		msg := fmt.Sprintf("Unexpected container data series for %v.%v (app %v): %v; ignoring", resource, field, app.Metadata, valueMap)
+		warnings = append(warnings, msg)
+		log.Warnf(msg)
+	}
+
+	return warnings, nil
+}
+
+func handleWarnErr(allWarnings v1.Warnings, newWarnings v1.Warnings, newError error, app *appmodel.App, label string) v1.Warnings {
+	if newError != nil {
+		msg := fmt.Sprintf("Error querying Prometheus for %v on app %v: %v; skipping value", label, app.Metadata, newError)
+		allWarnings = append(allWarnings, msg)
+		log.Error(msg)
+	} else if len(newWarnings) > 0 {
+		allWarnings = append(allWarnings, newWarnings...)
+		log.Warnf("Warnings while querying Prometheus for %v on app %v: %v", label, app.Metadata, newWarnings)
+	}
+	return allWarnings
+}
+
 func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range) (v1.Warnings, error) {
 	// set up query context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
 	defer cancel()
 
 	var allWarnings v1.Warnings
+
+	// --- Get container info
 
 	// prepare query selectors (TODO: refactor to a helper)
 	// Note: pod naming template is <deployment_name>-<pod_spec_hash>-<pod_unique_id>
@@ -228,125 +281,33 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 		app.Containers = append(app.Containers, container)
 	}
 
+	// --- Get resource specifications
+
 	// Get resource requests
 	warnings, err = getContainersResources(ctx, promApi, app, timeRange, containerResourceRequestsTemplate, &selectors, "Request")
-	if err != nil {
-		log.Errorf("Error querying Prometheus for container resource requests %v: %v\n", app.Metadata, err)
-	} else if len(warnings) > 0 {
-		allWarnings = append(allWarnings, warnings...)
-		log.Warnf("Warnings during container resource requests collection: %v\n", warnings)
-	}
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "resource requests")
 
 	// Get resource limits
 	warnings, err = getContainersResources(ctx, promApi, app, timeRange, containerResourceLimitsTemplate, &selectors, "Limit")
-	if err != nil {
-		log.Errorf("Error querying Prometheus for container resource limits %v: %v\n", app.Metadata, err)
-	} else if len(warnings) > 0 {
-		allWarnings = append(allWarnings, warnings...)
-		log.Warnf("Warnings during container resource limits collection: %v\n", warnings)
-	}
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "resource limits")
+
+	// --- Get usage metrics
 
 	// Get CPU resource usage
-	valueMap, warnings, err := getContainersUse(ctx, promApi, app, timeRange, containerCpuUseTemplate, &selectors)
-	if err != nil {
-		log.Errorf("Error querying Prometheus for container CPU usage %v: %v", app.Metadata, err)
-	} else {
-		if len(warnings) > 0 {
-			allWarnings = append(allWarnings, warnings...)
-			log.Warnf("Warnings during container CPU usage collection: %v", warnings)
-		}
-		// distribute values
-		for i := range app.Containers {
-			contName := app.Containers[i].Name
-			v, ok := valueMap[contName]
-			if !ok {
-				log.Warnf("Didn't find value of CPU usage for container %q of app %v; assuming 0", contName, app.Metadata)
-			} else {
-				app.Containers[i].Cpu.Usage = v
-				delete(valueMap, contName)
-			}
-		}
-		if len(valueMap) > 0 {
-			log.Warnf("Unexpected container series for CPU usage (app %v): %v; ignoring", app.Metadata, valueMap)
-		}
-
-	}
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuUseTemplate, &selectors, "Cpu", "Usage")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "CPU usage")
 
 	// Get memory resource usage
-	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerMemoryUseTemplate, &selectors)
-	if err != nil {
-		log.Errorf("Error querying Prometheus for container memory usage %v: %v", app.Metadata, err)
-	} else {
-		if len(warnings) > 0 {
-			allWarnings = append(allWarnings, warnings...)
-			log.Warnf("Warnings during container memory usage collection: %v", warnings)
-		}
-		// distribute values
-		for i := range app.Containers {
-			contName := app.Containers[i].Name
-			v, ok := valueMap[contName]
-			if !ok {
-				log.Warnf("Didn't find value of memory usage for container %q of app %v; assuming 0", contName, app.Metadata)
-			} else {
-				app.Containers[i].Memory.Usage = v
-				delete(valueMap, contName)
-			}
-		}
-		if len(valueMap) > 0 {
-			log.Warnf("Unexpected container series for memory usage (app %v): %v; ignoring", app.Metadata, valueMap)
-		}
-	}
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerMemoryUseTemplate, &selectors, "Memory", "Usage")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "memory usage")
 
 	// Get CPU throttling stats
-	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuSecondsThrottledTemplate, &selectors)
-	if err != nil {
-		log.Errorf("Error querying Prometheus for container CPU thottling for %v: %v", app.Metadata, err)
-	} else {
-		if len(warnings) > 0 {
-			allWarnings = append(allWarnings, warnings...)
-			log.Warnf("Warnings during container CPU throttling collection: %v", warnings)
-		}
-		// distribute values
-		for i := range app.Containers {
-			contName := app.Containers[i].Name
-			v, ok := valueMap[contName]
-			if !ok {
-				log.Warnf("Didn't find value of CPU throttling for container %q of app %v; assuming 0", contName, app.Metadata)
-			} else {
-				app.Containers[i].Cpu.SecondsThrottled = v
-				delete(valueMap, contName)
-			}
-		}
-		if len(valueMap) > 0 {
-			log.Warnf("Unexpected container series for CPU throttling (app %v): %v; ignoring", app.Metadata, valueMap)
-		}
-
-	}
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuSecondsThrottledTemplate, &selectors, "Cpu", "SecondsThrottled")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "CPU throttling")
 
 	// Get restart counts
-	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerRestartsTemplate, &selectors)
-	if err != nil {
-		log.Errorf("Error querying Prometheus for container restarts %v: %v", app.Metadata, err)
-	} else {
-		if len(warnings) > 0 {
-			allWarnings = append(allWarnings, warnings...)
-			log.Warnf("Warnings during container restarts collection: %v", warnings)
-		}
-		// distribute values
-		for i := range app.Containers {
-			contName := app.Containers[i].Name
-			v, ok := valueMap[contName]
-			if !ok {
-				log.Warnf("Didn't find value of restarts for container %q of app %v; assuming 0", contName, app.Metadata)
-			} else {
-				app.Containers[i].RestartCount = v
-				delete(valueMap, contName)
-			}
-		}
-		if len(valueMap) > 0 {
-			log.Warnf("Unexpected container series for restarts (app %v): %v; ignoring", app.Metadata, valueMap)
-		}
-	}
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerRestartsTemplate, &selectors, "", "RestartCount")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "restart counts")
 
 	log.Tracef("App %v has %v container(s): %v", app.Metadata, len(app.Containers), app.Containers)
 
