@@ -12,6 +12,7 @@ var containerResourceRequestsTemplate *template.Template
 var containerResourceLimitsTemplate *template.Template
 var containerCpuUseTemplate *template.Template
 var containerMemoryUseTemplate *template.Template
+var containerCpuSecondsThrottledTemplate *template.Template
 var containerRestartsTemplate *template.Template
 
 // CPU and memory saturation references:
@@ -45,6 +46,8 @@ func initializeTemplates() {
 	// container utilization
 
 	// container CPU-specifics
+	containerCpuSecondsThrottledTemplate = template.Must(template.New("prometheusContainerCpuSecondsThrottledTemplate").Parse(
+		`avg by (container) (rate(container_cpu_cfs_throttled_seconds_total{ {{ .PodSelector }} }[5m]))`))
 
 	// container Memory-specifics
 	// TODO (e.g., oom kill count, maybe from kube_pod_container_status_terminated_reason)
@@ -55,18 +58,6 @@ func initializeTemplates() {
 
 	/*
 
-				sum(
-					rate(container_cpu_usage_seconds_total[5m]))
-				by (container_name)
-
-				sum(
-					rate(container_cpu_cfs_throttled_seconds_total[5m]))
-				by (container_name)
-				avg by (container) (rate(container_cpu_cfs_throttled_seconds_total{namespace="bank-of-anthos-opsani",pod=~"frontend-.*"}[5m]))
-
-				container_memory_working_set_bytes
-
-				avg by (container) (container_memory_working_set_bytes{namespace="bank-of-anthos-opsani", pod=~"frontend-.*"})
 
 				sum(container_memory_working_set_bytes) by (container_name) / sum(label_join(kube_pod_container_resource_limits_memory_bytes,
 					"container_name", "", "container")) by (container_name)

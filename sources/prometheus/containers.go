@@ -294,6 +294,32 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 		}
 	}
 
+	// Get CPU throttling stats
+	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuSecondsThrottledTemplate, &selectors)
+	if err != nil {
+		log.Errorf("Error querying Prometheus for container CPU thottling for %v: %v", app.Metadata, err)
+	} else {
+		if len(warnings) > 0 {
+			allWarnings = append(allWarnings, warnings...)
+			log.Warnf("Warnings during container CPU throttling collection: %v", warnings)
+		}
+		// distribute values
+		for i := range app.Containers {
+			contName := app.Containers[i].Name
+			v, ok := valueMap[contName]
+			if !ok {
+				log.Warnf("Didn't find value of CPU throttling for container %q of app %v; assuming 0", contName, app.Metadata)
+			} else {
+				app.Containers[i].Cpu.SecondsThrottled = v
+				delete(valueMap, contName)
+			}
+		}
+		if len(valueMap) > 0 {
+			log.Warnf("Unexpected container series for CPU throttling (app %v): %v; ignoring", app.Metadata, valueMap)
+		}
+
+	}
+
 	// Get restart counts
 	valueMap, warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerRestartsTemplate, &selectors)
 	if err != nil {

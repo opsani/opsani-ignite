@@ -13,6 +13,8 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	log "github.com/sirupsen/logrus"
+
+	opsmath "opsani-ignite/math"
 )
 
 type ValueStats struct {
@@ -97,7 +99,7 @@ func valueFromSamplePairs(samples []model.SamplePair, logLabel string) (float64,
 	}
 
 	// choose value to return (TODO depending on distribution, use Average, Median, Max, etc.)
-	v := d.Average
+	v := opsmath.MagicRound(d.Average)
 
 	return v, warnings, nil
 }
