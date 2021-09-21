@@ -43,8 +43,8 @@ func appReasonAndColor(app *appmodel.App) (string, int) {
 
 	// handle unqualified apps
 	if !isQualifiedApp(app) {
-		if len(app.Opportunity.Cons) > 0 {
-			reason = app.Opportunity.Cons[0]
+		if len(app.Analysis.Cons) > 0 {
+			reason = app.Analysis.Cons[0]
 		} else {
 			reason = "n/a"
 		}
@@ -54,18 +54,18 @@ func appReasonAndColor(app *appmodel.App) (string, int) {
 	}
 
 	// handle qualified apps depending on rating
-	if app.Opportunity.Rating >= 50 {
-		if len(app.Opportunity.Pros) > 0 {
-			reason = app.Opportunity.Pros[0]
+	if app.Analysis.Rating >= 50 {
+		if len(app.Analysis.Pros) > 0 {
+			reason = app.Analysis.Pros[0]
 		} else {
 			reason = "n/a"
 		}
 		color = tablewriter.FgGreenColor
 	} else {
-		if len(app.Opportunity.Cons) > 0 {
-			reason = app.Opportunity.Cons[0]
-		} else if len(app.Opportunity.Pros) > 0 {
-			reason = app.Opportunity.Pros[0]
+		if len(app.Analysis.Cons) > 0 {
+			reason = app.Analysis.Cons[0]
+		} else if len(app.Analysis.Pros) > 0 {
+			reason = app.Analysis.Pros[0]
 		} else {
 			reason = "n/a"
 		}
@@ -92,11 +92,11 @@ func (table *AppTable) outputTableHeader() {
 func (table *AppTable) outputTableApp(app *appmodel.App) {
 	reason, color := appReasonAndColor(app)
 	rowValues := []string{
-		fmt.Sprintf("%d%%", app.Opportunity.Rating),
-		fmt.Sprintf("%d%%", app.Opportunity.Confidence),
+		fmt.Sprintf("%d%%", app.Analysis.Rating),
+		fmt.Sprintf("%d%%", app.Analysis.Confidence),
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
-		app.Opportunity.MainContainer,
+		app.Analysis.MainContainer,
 		fmt.Sprintf("%.0fx%d", app.Metrics.AverageReplicas, len(app.Containers)),
 		fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
 		fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
@@ -125,24 +125,24 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	appColors := []tablewriter.Colors{[]int{0}, []int{appColor}}
 	prosColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
 	consColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgYellowColor}}
-	if app.Opportunity.Rating < 0 {
+	if app.Analysis.Rating < 0 {
 		consColors = []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
 	}
 
 	table.t.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
 	table.t.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
 	table.t.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
-	table.t.Rich([]string{"Main Container", app.Opportunity.MainContainer}, nil)
+	table.t.Rich([]string{"Main Container", app.Analysis.MainContainer}, nil)
 
-	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Opportunity.Rating)}, appColors)
-	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Opportunity.Confidence)}, appColors)
+	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Analysis.Rating)}, appColors)
+	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Analysis.Confidence)}, appColors)
 
 	//table.Rich(blank, nil)
-	if len(app.Opportunity.Pros) > 0 {
-		table.t.Rich([]string{"Pros", strings.Join(app.Opportunity.Pros, "\n")}, prosColors)
+	if len(app.Analysis.Pros) > 0 {
+		table.t.Rich([]string{"Pros", strings.Join(app.Analysis.Pros, "\n")}, prosColors)
 	}
-	if len(app.Opportunity.Cons) > 0 {
-		table.t.Rich([]string{"Cons", strings.Join(app.Opportunity.Cons, "\n")}, consColors)
+	if len(app.Analysis.Cons) > 0 {
+		table.t.Rich([]string{"Cons", strings.Join(app.Analysis.Cons, "\n")}, consColors)
 	}
 
 	//table.Rich(blank, nil)

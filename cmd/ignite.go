@@ -22,18 +22,18 @@ import (
 func opportunitySorter(apps []*appmodel.App, i, j int) bool {
 	ia, ja := apps[i], apps[j]
 	// sort by rating first
-	if ia.Opportunity.Rating > ja.Opportunity.Rating {
+	if ia.Analysis.Rating > ja.Analysis.Rating {
 		return true
 	}
-	if ia.Opportunity.Rating < ja.Opportunity.Rating {
+	if ia.Analysis.Rating < ja.Analysis.Rating {
 		return false
 	}
 	// same rating, top confidence first for + rated apps; top confidence at bottom for - rated apps
-	if ia.Opportunity.Confidence > ja.Opportunity.Confidence {
-		return ia.Opportunity.Rating >= 0
+	if ia.Analysis.Confidence > ja.Analysis.Confidence {
+		return ia.Analysis.Rating >= 0
 	}
-	if ia.Opportunity.Confidence < ja.Opportunity.Confidence {
-		return ia.Opportunity.Rating < 0
+	if ia.Analysis.Confidence < ja.Analysis.Confidence {
+		return ia.Analysis.Rating < 0
 	}
 	// withint the same ratings & confidence, order by namespace, workload name alphabetically
 	// (we do this so that the order is stable and the order is user-friendly)
@@ -47,7 +47,7 @@ func opportunitySorter(apps []*appmodel.App, i, j int) bool {
 }
 
 func isQualifiedApp(app *appmodel.App) bool {
-	return app.Opportunity.Rating >= 0
+	return app.Analysis.Rating >= 0
 }
 
 func runIgnite(cmd *cobra.Command, args []string) {

@@ -51,7 +51,7 @@ type AppMetrics struct {
 	// TODO: add network traffic, esp. indication of traffic
 }
 
-type AppOpportunity struct {
+type AppAnalysis struct {
 	Rating        int      `yaml:"rating"`         // how suitable for optimization
 	Confidence    int      `yaml:"confidence"`     // how confident is the rating
 	MainContainer string   `yaml:"main_container"` // container to optimize or empty if not identified
@@ -60,11 +60,11 @@ type AppOpportunity struct {
 }
 
 type App struct {
-	Metadata    AppMetadata    `yaml:"metadata"`
-	Settings    AppSettings    `yaml:"settings"`
-	Containers  []AppContainer `yaml:"containers"`
-	Metrics     AppMetrics     `yaml:"metrics"`
-	Opportunity AppOpportunity `yaml:"analysis"`
+	Metadata   AppMetadata    `yaml:"metadata"`
+	Settings   AppSettings    `yaml:"settings"`
+	Containers []AppContainer `yaml:"containers"`
+	Metrics    AppMetrics     `yaml:"metrics"`
+	Analysis   AppAnalysis    `yaml:"analysis"`
 }
 
 // Utility methods

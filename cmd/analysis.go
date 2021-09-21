@@ -163,8 +163,8 @@ func analyzeContainers(app *appmodel.App) {
 	})
 
 	// identify main container (if possible)
-	if app.Opportunity.MainContainer == "" {
-		app.Opportunity.MainContainer = identifyMainContainer(app)
+	if app.Analysis.MainContainer == "" {
+		app.Analysis.MainContainer = identifyMainContainer(app)
 	}
 
 	// identify QoS
@@ -183,8 +183,8 @@ func preAnalyzeApp(app *appmodel.App) {
 	analyzeContainers(app)
 
 	// update app-level resource saturation (based on main container)
-	if app.Opportunity.MainContainer != "" {
-		if index, ok := app.ContainerIndexByName(app.Opportunity.MainContainer); ok {
+	if app.Analysis.MainContainer != "" {
+		if index, ok := app.ContainerIndexByName(app.Analysis.MainContainer); ok {
 			// replace old-style pod-level saturation with saturation of the target container
 			m := &app.Containers[index]
 			if m.Cpu.Saturation > 0 {
@@ -202,7 +202,7 @@ func analyzeApp(app *appmodel.App) {
 	preAnalyzeApp(app)
 
 	// start from current analysis
-	o := app.Opportunity
+	o := app.Analysis
 
 	// having a writeable PVC disqualifies the app immediately (stateful)
 	if app.Settings.WriteableVolume {
@@ -250,5 +250,5 @@ func analyzeApp(app *appmodel.App) {
 	}
 
 	// update
-	app.Opportunity = o
+	app.Analysis = o
 }
