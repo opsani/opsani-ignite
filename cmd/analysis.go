@@ -23,8 +23,8 @@ type ResourceUtilizationRating struct {
 // const table
 func getResourceUtilizationRatingsTable() []ResourceUtilizationRating {
 	return []ResourceUtilizationRating{
-		{100, 60}, // >=100 provides opportunity to improve performance/rightsize
-		{80, 20},  // 80..100 likely not much room to optimize
+		{100, 30}, // >=100 provides opportunity to improve performance/rightsize
+		{80, 10},  // 80..100 likely not much room to optimize
 		{40, 40},  // 40..80 some optimization room
 		{1, 60},   // 1..40 likely lots to optimize
 		{0, 0},    // no utilization - likely can't optimize
@@ -220,6 +220,39 @@ func computePodQoS(app *appmodel.App) string {
 	}
 }
 
+func resourcesExplicitlyDefined(app *appmodel.App) (bool, string) {
+	// select the main container
+	if app.Analysis.MainContainer == "" {
+		return false, "main container not identified"
+	}
+	var main *appmodel.AppContainer
+	for i := range app.Containers {
+		if app.Containers[i].Name == app.Analysis.MainContainer {
+			main = &app.Containers[i]
+			break
+		}
+	}
+	if main == nil {
+		return false, "main container not found" // should never happen
+	}
+
+	// check requirements
+	cpuGood := main.Cpu.Request > 0 || main.Cpu.Limit > 0
+	memGood := main.Memory.Request > 0 || main.Memory.Limit > 0
+	if cpuGood && memGood {
+		return true, ""
+	}
+
+	// construct feedback message for human consumption
+	if !cpuGood && !memGood {
+		return false, "No resources defined (requests or limits required for cpu & memory resources)"
+	}
+	if !cpuGood {
+		return false, "CPU resources not defined (request or limit required)"
+	}
+	return false, "Memory resources not defined (request or limit required)"
+}
+
 // --- App-level Analysis ----------------------------------------------------
 
 func preAnalyzeApp(app *appmodel.App) {
@@ -261,6 +294,15 @@ func analyzeApp(app *appmodel.App) {
 		o.Rating = -100
 		o.Confidence = 100
 		o.Cons = append(o.Cons, "Stateful: pods have writeable volumes")
+	}
+
+	// missing resource specification (main container has no QoS)
+	if resGood, msg := resourcesExplicitlyDefined(app); resGood {
+		o.Pros = append(o.Pros, "Main container resources specified")
+	} else {
+		o.Rating = -100
+		o.Confidence = 100
+		o.Cons = append(o.Cons, msg)
 	}
 
 	// analyze utilization
