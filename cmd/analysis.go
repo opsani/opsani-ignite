@@ -176,6 +176,50 @@ func analyzeContainers(app *appmodel.App) {
 	// TODO
 }
 
+func computePodQoS(app *appmodel.App) string {
+	// following the rules at https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/
+	// note: ignoring the init containers
+	// TODO: use other sources to get the QoS, use this one to (a) populate QoS if no QoS info found and
+	//       (b) validate the QoS found (e.g., degrade)
+
+	allMatch := true  // assume all containers, all resources match the guaranteed requirements
+	oneMatch := false // track if at least one container, one resource has resources specified
+	for i := range app.Containers {
+		c := &app.Containers[i]
+
+		if c.Cpu.Limit > 0 {
+			if c.Cpu.Request > 0 && c.Cpu.Request != c.Cpu.Limit {
+				allMatch = false
+			}
+			oneMatch = true
+		} else if c.Cpu.Request > 0 {
+			allMatch = false
+			oneMatch = true
+		} else {
+			allMatch = false
+		}
+		if c.Memory.Limit > 0 {
+			if c.Memory.Request > 0 && c.Memory.Request != c.Memory.Limit {
+				allMatch = false
+			}
+			oneMatch = true
+		} else if c.Memory.Request > 0 {
+			allMatch = false
+			oneMatch = true
+		} else {
+			allMatch = false
+		}
+	}
+
+	if allMatch {
+		return appmodel.QOS_GUARANTEED
+	} else if oneMatch {
+		return appmodel.QOS_BURSTABLE
+	} else {
+		return appmodel.QOS_BESTEFFORT
+	}
+}
+
 // --- App-level Analysis ----------------------------------------------------
 
 func preAnalyzeApp(app *appmodel.App) {
@@ -194,6 +238,14 @@ func preAnalyzeApp(app *appmodel.App) {
 				app.Metrics.MemoryUtilization = m.Memory.Saturation * 100
 			}
 		}
+	}
+
+	computedQos := computePodQoS(app)
+	if app.Settings.QosClass == "" {
+		app.Settings.QosClass = computedQos
+	} else if app.Settings.QosClass != computedQos {
+		log.Warnf("Computed QoS class %q does not match discovered QoS class %q for app %v; assuming the latter",
+			computedQos, app.Settings.QosClass, app.Metadata)
 	}
 }
 

@@ -1,5 +1,11 @@
 package model
 
+const (
+	QOS_GUARANTEED = "guaranteed"
+	QOS_BURSTABLE  = "burstable"
+	QOS_BESTEFFORT = "besteffort"
+)
+
 type AppMetadata struct {
 	//Cluster string // needed?
 	//Name               string
