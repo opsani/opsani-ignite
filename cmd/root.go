@@ -23,6 +23,7 @@ var deployment string
 var outputFormat string
 var showAllApps bool
 var showDebug bool
+var suppressWarnings bool
 
 const (
 	OUTPUT_TABLE  = "table"
@@ -49,6 +50,9 @@ a list of optimization candidates in preferred order of onboarding.`,
 		// check dependent flags
 		if deployment != "" && namespace == "" {
 			return fmt.Errorf("--deployment flag requires --namespace flag")
+		}
+		if suppressWarnings && showDebug {
+			return fmt.Errorf("--quiet and --debug flags cannot be combined")
 		}
 
 		// check output format
@@ -92,6 +96,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", OUTPUT_TABLE, "Output format")
 	rootCmd.PersistentFlags().BoolVarP(&showAllApps, "show-all", "a", false, "Show all apps, including unoptimizable")
 	rootCmd.PersistentFlags().BoolVar(&showDebug, "debug", false, "Display tracing/debug information to stderr")
+	rootCmd.PersistentFlags().BoolVarP(&suppressWarnings, "quiet", "q", false, "Suppress warning and info level messages")
 }
 
 // initConfig reads in config file and ENV variables if set.

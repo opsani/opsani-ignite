@@ -53,6 +53,8 @@ func isQualifiedApp(app *appmodel.App) bool {
 func runIgnite(cmd *cobra.Command, args []string) {
 	if showDebug {
 		log.SetLevel(log.TraceLevel)
+	} else if suppressWarnings {
+		log.SetLevel(log.ErrorLevel)
 	} else {
 		log.SetLevel(log.InfoLevel)
 	}
