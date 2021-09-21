@@ -12,12 +12,21 @@ var containerResourceRequestsTemplate *template.Template
 var containerResourceLimitsTemplate *template.Template
 var containerCpuUseTemplate *template.Template
 var containerMemoryUseTemplate *template.Template
+var containerCpuSaturationTemplate *template.Template
+var containerMemorySaturationTemplate *template.Template
 var containerCpuSecondsThrottledTemplate *template.Template
 var containerRestartsTemplate *template.Template
 
+// Useful References:
+//
 // CPU and memory saturation references:
 //   https://blog.freshtracks.io/a-deep-dive-into-kubernetes-metrics-part-3-container-resource-metrics-361c5ee46e66
 //   https://github.com/google/cadvisor/issues/2026
+//
+// Join example:
+//   https://ypereirareis.github.io/blog/2020/02/21/how-to-join-prometheus-metrics-by-label-with-promql/
+// CPU throttling / CFS info
+//   https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/resource_management_guide/sec-cpu
 
 func initializeTemplates() {
 	replicaCountTemplate = template.Must(template.New("prometheusPodAverageReplicas").Parse(
@@ -44,6 +53,12 @@ func initializeTemplates() {
 		`avg by (container) (container_memory_working_set_bytes{ {{ .PodSelector }} })`))
 
 	// container utilization
+	containerCpuSaturationTemplate = template.Must(template.New("prometheusContainerCpuSaturationTemplate").Parse(
+		`avg (rate(container_cpu_usage_seconds_total{ {{ .PodSelector }},container!~"|POD" }[5m]) / on(pod, container) 
+			kube_pod_container_resource_requests{  {{ .PodSelector }},resource="cpu"}) by (container)`))
+	containerMemorySaturationTemplate = template.Must(template.New("prometheusContainerMemorySaturationTemplate").Parse(
+		`avg (container_memory_working_set_bytes{ {{ .PodSelector }},container!~"|POD" } / on(pod, container) 
+			kube_pod_container_resource_requests{  {{ .PodSelector }},resource="memory"}) by (container)`))
 
 	// container CPU-specifics
 	containerCpuSecondsThrottledTemplate = template.Must(template.New("prometheusContainerCpuSecondsThrottledTemplate").Parse(
@@ -55,20 +70,4 @@ func initializeTemplates() {
 	// container restarts
 	containerRestartsTemplate = template.Must(template.New("prometheusRestartsTemplate").Parse(
 		`avg by (container) (kube_pod_container_status_restarts_total{ {{ .PodSelector }} })`))
-
-	/*
-
-
-				sum(container_memory_working_set_bytes) by (container_name) / sum(label_join(kube_pod_container_resource_limits_memory_bytes,
-					"container_name", "", "container")) by (container_name)
-
-				// from https://github.com/google/cadvisor/issues/2026
-				sum(rate(container_cpu_usage_seconds_total{name!~".*prometheus.*", image!="", container_name!="POD"}[5m])) by (pod_name, container_name) /
-		           sum(container_spec_cpu_quota{name!~".*prometheus.*", image!="", container_name!="POD"}/container_spec_cpu_period{name!~".*prometheus.*", image!="", container_name!="POD"}) by (pod_name, container_name)
-
-				// CPU throttling / CFS info
-				https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/resource_management_guide/sec-cpu
-
-
-	*/
 }

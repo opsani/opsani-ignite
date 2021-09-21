@@ -293,13 +293,17 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 
 	// --- Get usage metrics
 
-	// Get CPU resource usage
+	// Get resource usage
 	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuUseTemplate, &selectors, "Cpu", "Usage")
 	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "CPU usage")
-
-	// Get memory resource usage
 	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerMemoryUseTemplate, &selectors, "Memory", "Usage")
 	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "memory usage")
+
+	// Get resource saturation
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuSaturationTemplate, &selectors, "Cpu", "Saturation")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "CPU saturation")
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerMemorySaturationTemplate, &selectors, "Memory", "Saturation")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "memory saturation")
 
 	// Get CPU throttling stats
 	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuSecondsThrottledTemplate, &selectors, "Cpu", "SecondsThrottled")
@@ -312,20 +316,4 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 	log.Tracef("App %v has %v container(s): %v", app.Metadata, len(app.Containers), app.Containers)
 
 	return nil, nil
-}
-
-func analyzeContainers(app *appmodel.App) {
-	// sort containers info
-	// TODO
-
-	// identify main container (if possible)
-	// TODO
-
-	// identify QoS
-	// see https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/#create-a-pod-that-gets-assigned-a-qos-class-of-guaranteed
-	//     https://www.replex.io/blog/everything-you-need-to-know-about-kubernetes-quality-of-service-qos-classes (somewhat imprecise)
-	// TODO
-
-	// Calculate resource saturation (utilization)
-	// TODO
 }

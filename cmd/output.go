@@ -79,8 +79,8 @@ func (table *AppTable) outputTableHeader() {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
-	table.t.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Instances", "CPU", "Mem", "Reason"})
-	table.t.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
+	table.t.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "Container", "Instances", "CPU", "Mem", "Reason"})
+	table.t.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
 	table.t.SetFooter([]string{})
 	table.t.SetCenterSeparator("")
 	table.t.SetColumnSeparator("")
@@ -96,6 +96,7 @@ func (table *AppTable) outputTableApp(app *appmodel.App) {
 		fmt.Sprintf("%d%%", app.Opportunity.Confidence),
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
+		app.Opportunity.MainContainer,
 		fmt.Sprintf("%.0fx%d", app.Metrics.AverageReplicas, len(app.Containers)),
 		fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
 		fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
@@ -131,6 +132,7 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	table.t.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
 	table.t.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
 	table.t.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
+	table.t.Rich([]string{"Main Container", app.Opportunity.MainContainer}, nil)
 
 	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Opportunity.Rating)}, appColors)
 	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Opportunity.Confidence)}, appColors)

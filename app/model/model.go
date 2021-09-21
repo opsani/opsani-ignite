@@ -41,6 +41,7 @@ type AppContainer struct {
 		AppContainerResourceInfo `yaml:"resource"`
 	} `yaml:"memory"`
 	RestartCount float64 `yaml:"restart_count"` // yaml: don't omit empty, since 0 is a valid value
+	PseudoCost   float64 `yaml:"pseudo_cost"`
 }
 
 type AppMetrics struct {
@@ -51,10 +52,11 @@ type AppMetrics struct {
 }
 
 type AppOpportunity struct {
-	Rating     int      `yaml:"rating"`     // how suitable for optimization
-	Confidence int      `yaml:"confidence"` // how confident is the rating
-	Pros       []string `yaml:"pros"`       // list of pros for optimization
-	Cons       []string `yaml:"cons"`       // list of cons for optimizatoin
+	Rating        int      `yaml:"rating"`         // how suitable for optimization
+	Confidence    int      `yaml:"confidence"`     // how confident is the rating
+	MainContainer string   `yaml:"main_container"` // container to optimize or empty if not identified
+	Pros          []string `yaml:"pros"`           // list of pros for optimization
+	Cons          []string `yaml:"cons"`           // list of cons for optimizatoin
 }
 
 type App struct {
@@ -63,4 +65,17 @@ type App struct {
 	Containers  []AppContainer `yaml:"containers"`
 	Metrics     AppMetrics     `yaml:"metrics"`
 	Opportunity AppOpportunity `yaml:"analysis"`
+}
+
+// Utility methods
+
+func (app *App) ContainerIndexByName(name string) (index int, ok bool) {
+	ok = false
+	for index = range app.Containers {
+		if app.Containers[index].Name == name {
+			ok = true
+			return
+		}
+	}
+	return
 }
