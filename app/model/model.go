@@ -57,12 +57,31 @@ type AppMetrics struct {
 	// TODO: add network traffic, esp. indication of traffic
 }
 
+type AppFlag int
+
+const (
+	F_WRITEABLE_VOLUME = iota
+	F_RESOURCE_SPEC
+	F_SINGLE_REPLICA
+	F_MANY_REPLICAS
+	F_TRAFFIC
+	F_UTILIZATION
+	F_BURST
+	F_MAIN_CONTAINER
+)
+
+func (f AppFlag) String() string {
+	return []string{"V", "R", "S", "M", "T", "U", "B", "C"}[f]
+}
+
 type AppAnalysis struct {
-	Rating        int      `yaml:"rating"`         // how suitable for optimization
-	Confidence    int      `yaml:"confidence"`     // how confident is the rating
-	MainContainer string   `yaml:"main_container"` // container to optimize or empty if not identified
-	Pros          []string `yaml:"pros"`           // list of pros for optimization
-	Cons          []string `yaml:"cons"`           // list of cons for optimizatoin
+	Rating        int              `yaml:"rating"`         // how suitable for optimization
+	Confidence    int              `yaml:"confidence"`     // how confident is the rating
+	MainContainer string           `yaml:"main_container"` // container to optimize or empty if not identified
+	Flags         map[AppFlag]bool `yaml:"flags"`          // flags
+	Opportunities []string         `yaml:"opportunities"`  // list of optimization opportunities
+	Cautions      []string         `yaml:"cautions"`       // list of concerns/cautions
+	Blockers      []string         `yaml:"blockers"`       // list of blockers prevention optimization
 }
 
 type App struct {

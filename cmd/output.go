@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
@@ -39,50 +40,61 @@ func getDisplayMethods() map[string]DisplayMethods {
 	}
 }
 
-func appReasonAndColor(app *appmodel.App) (string, int) {
-	var reason string
-	var color int // tablewriter colors
+func appOpportunityAndColor(app *appmodel.App) (oppty string, color int) {
+	// note: color is among tablewriter colors
 
 	// handle unqualified apps
 	if !isQualifiedApp(app) {
-		if len(app.Analysis.Cons) > 0 {
-			reason = app.Analysis.Cons[0]
-		} else {
-			reason = "n/a"
-		}
 		color = 0 // keep default color (neutral); alt: tablewriter.FgRedColor
-
-		return reason, color
+		return
 	}
 
-	// handle qualified apps depending on rating
+	// list opportunities (usually one but allow for multiple)
+	if len(app.Analysis.Opportunities) > 0 {
+		oppty = strings.Join(app.Analysis.Opportunities, "\n")
+	} else {
+		oppty = "n/a"
+	}
+
+	// choose color depending on rating
 	if app.Analysis.Rating >= 50 {
-		if len(app.Analysis.Pros) > 0 {
-			reason = app.Analysis.Pros[0]
-		} else {
-			reason = "n/a"
-		}
 		color = tablewriter.FgGreenColor
 	} else {
-		if len(app.Analysis.Cons) > 0 {
-			reason = app.Analysis.Cons[0]
-		} else if len(app.Analysis.Pros) > 0 {
-			reason = app.Analysis.Pros[0]
-		} else {
-			reason = "n/a"
-		}
 		color = tablewriter.FgYellowColor
 	}
 
-	return reason, color
+	return
+}
+
+func flagsString(flags map[appmodel.AppFlag]bool) (ret string) {
+	type flagStruct struct {
+		flag  appmodel.AppFlag
+		value bool
+	}
+
+	list := make([]flagStruct, 0, len(flags))
+	for f, v := range flags {
+		list = append(list, flagStruct{f, v})
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].flag < list[j].flag
+	})
+	for _, e := range list {
+		if e.value {
+			ret += strings.ToUpper(e.flag.String())
+		} else {
+			ret += strings.ToLower(e.flag.String())
+		}
+	}
+	return
 }
 
 func (table *AppTable) outputTableHeader() {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
-	table.t.SetHeader([]string{"Rating", "Confidence", "Namespace", "Deployment", "QoS Class", "Instances", "CPU", "Mem", "Reason"})
-	table.t.SetColumnAlignment([]int{RIGHT, RIGHT, LEFT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT})
+	table.t.SetHeader([]string{"Namespace", "Deployment", "QoS Class", "Instances", "CPU", "Mem", "Opportunity", "Flags"})
+	table.t.SetColumnAlignment([]int{LEFT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT, LEFT})
 	table.t.SetFooter([]string{})
 	table.t.SetCenterSeparator("")
 	table.t.SetColumnSeparator("")
@@ -92,10 +104,8 @@ func (table *AppTable) outputTableHeader() {
 }
 
 func (table *AppTable) outputTableApp(app *appmodel.App) {
-	reason, color := appReasonAndColor(app)
+	reason, color := appOpportunityAndColor(app)
 	rowValues := []string{
-		fmt.Sprintf("%d%%", app.Analysis.Rating),
-		fmt.Sprintf("%d%%", app.Analysis.Confidence),
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
 		app.Settings.QosClass,
@@ -103,6 +113,7 @@ func (table *AppTable) outputTableApp(app *appmodel.App) {
 		fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
 		fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
 		reason,
+		flagsString(app.Analysis.Flags),
 	}
 	cellColors := []int{color}
 	rowColors := make([]tablewriter.Colors, len(rowValues))
@@ -123,13 +134,11 @@ func (table *AppTable) outputDetailHeader() {
 
 func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	blank := []string{""}
-	_, appColor := appReasonAndColor(app)
+	_, appColor := appOpportunityAndColor(app)
 	appColors := []tablewriter.Colors{[]int{0}, []int{appColor}}
-	prosColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
-	consColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgYellowColor}}
-	if app.Analysis.Rating < 0 {
-		consColors = []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
-	}
+	opportunityColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
+	cautionColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgYellowColor}}
+	blockerColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
 
 	table.t.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
 	table.t.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
@@ -141,18 +150,22 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Analysis.Confidence)}, appColors)
 
 	//table.Rich(blank, nil)
-	if len(app.Analysis.Pros) > 0 {
-		table.t.Rich([]string{"Pros", strings.Join(app.Analysis.Pros, "\n")}, prosColors)
+	if len(app.Analysis.Opportunities) > 0 {
+		table.t.Rich([]string{"Opportunities", strings.Join(app.Analysis.Opportunities, "\n")}, opportunityColors)
 	}
-	if len(app.Analysis.Cons) > 0 {
-		table.t.Rich([]string{"Cons", strings.Join(app.Analysis.Cons, "\n")}, consColors)
+	if len(app.Analysis.Cautions) > 0 {
+		table.t.Rich([]string{"Cautions", strings.Join(app.Analysis.Cautions, "\n")}, cautionColors)
+	}
+	if len(app.Analysis.Blockers) > 0 {
+		table.t.Rich([]string{"Blockers", strings.Join(app.Analysis.Blockers, "\n")}, blockerColors)
 	}
 
 	//table.Rich(blank, nil)
-	table.t.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.0f%%", app.Metrics.AverageReplicas)}, nil)
+	table.t.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.1g", app.Metrics.AverageReplicas)}, nil)
 	table.t.Rich([]string{"Container Count", fmt.Sprintf("%3d", len(app.Containers))}, nil)
 	table.t.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
 	table.t.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
+	table.t.Rich([]string{"Opsani Flags", flagsString(app.Analysis.Flags)}, nil)
 
 	table.t.Rich(blank, nil)
 }

@@ -6,6 +6,7 @@ This file is part of https://github.com/opsani/opsani-ignite
 package cmd
 
 import (
+	"fmt"
 	"math"
 	"sort"
 
@@ -245,12 +246,12 @@ func resourcesExplicitlyDefined(app *appmodel.App) (bool, string) {
 
 	// construct feedback message for human consumption
 	if !cpuGood && !memGood {
-		return false, "No resources defined (requests or limits required for cpu & memory resources)"
+		return false, "Resources not specified (request or limit for cpu and memory is required"
 	}
 	if !cpuGood {
-		return false, "CPU resources not defined (request or limit required)"
+		return false, "CPU resources not specified (request or limit is required)"
 	}
-	return false, "Memory resources not defined (request or limit required)"
+	return false, "Memory resources not specified (request or limit required)"
 }
 
 // --- App-level Analysis ----------------------------------------------------
@@ -282,38 +283,79 @@ func preAnalyzeApp(app *appmodel.App) {
 	}
 }
 
+func efficiencyImprovementEstimate(app *appmodel.App) string {
+	cpu := app.Metrics.CpuUtilization
+	mem := app.Metrics.MemoryUtilization
+	if cpu == 0 || mem == 0 {
+		return ""
+	}
+	if cpu >= 80 || mem >= 80 {
+		return ""
+	}
+	imp := (160 - cpu - mem) / 2.0
+	imp = float64(math.Round(imp/10) * 10)
+	if imp >= 60 {
+		return fmt.Sprintf("2x-%gx", 1+math.Round(100.0/imp*10)/10)
+	} else if imp > 20 {
+		return fmt.Sprintf("%0.f-%0.f%%", imp-20, imp)
+	} else {
+		return fmt.Sprintf("up to %0.f%%", imp)
+	}
+}
+
 func analyzeApp(app *appmodel.App) {
 	// finalize basis and prepare for analysis
 	preAnalyzeApp(app)
 
 	// start from current analysis
 	o := app.Analysis
+	if o.Flags == nil {
+		o.Flags = make(map[appmodel.AppFlag]bool)
+	}
+
+	// check main container
+	if app.Analysis.MainContainer != "" {
+		o.Flags[appmodel.F_MAIN_CONTAINER] = true
+	} else {
+		o.Blockers = append(o.Blockers, "Could not identify main container")
+		o.Flags[appmodel.F_MAIN_CONTAINER] = false
+	}
 
 	// having a writeable PVC disqualifies the app immediately (stateful)
 	if app.Settings.WriteableVolume {
-		o.Rating = -100
-		o.Confidence = 100
-		o.Cons = append(o.Cons, "Stateful: pods have writeable volumes")
+		o.Blockers = append(o.Blockers, "Stateful: pods have writeable volumes")
+		o.Flags[appmodel.F_WRITEABLE_VOLUME] = true
+	} else {
+		o.Flags[appmodel.F_WRITEABLE_VOLUME] = false
 	}
 
 	// missing resource specification (main container has no QoS)
 	if resGood, msg := resourcesExplicitlyDefined(app); resGood {
-		o.Pros = append(o.Pros, "Main container resources specified")
+		o.Flags[appmodel.F_RESOURCE_SPEC] = true
 	} else {
-		o.Rating = -100
-		o.Confidence = 100
-		o.Cons = append(o.Cons, msg)
+		o.Flags[appmodel.F_RESOURCE_SPEC] = false
+		o.Blockers = append(o.Blockers, msg)
 	}
 
 	// analyze utilization
+	o.Flags[appmodel.F_UTILIZATION] = app.Metrics.CpuUtilization > 0 && app.Metrics.MemoryUtilization > 0
 	utilBump := utilizationCombinedRating(app.Metrics.CpuUtilization, app.Metrics.MemoryUtilization)
 	if utilBump != 0 {
 		o.Rating += utilBump
 		o.Confidence += 30
-		if utilBump >= 30 {
-			o.Pros = append(o.Pros, "Resource utilization")
+		if app.Metrics.CpuUtilization >= 100 || app.Metrics.MemoryUtilization >= 100 {
+			o.Opportunities = append(o.Opportunities, "Improve performance/reliability")
+			o.Flags[appmodel.F_BURST] = true
+		} else if utilBump >= 30 {
+			effImpr := efficiencyImprovementEstimate(app)
+			if effImpr != "" {
+				effImpr = " by " + effImpr
+			}
+			o.Opportunities = append(o.Opportunities, fmt.Sprintf("Improve efficiency%v", effImpr))
+			o.Flags[appmodel.F_BURST] = false
 		} else if utilBump == 0 {
-			o.Cons = append(o.Cons, "Idle application")
+			o.Cautions = append(o.Cautions, "Idle application")
+			o.Flags[appmodel.F_BURST] = false
 		}
 	}
 
@@ -321,14 +363,25 @@ func analyzeApp(app *appmodel.App) {
 	if app.Metrics.AverageReplicas <= 1 {
 		o.Rating -= 20
 		o.Confidence += 10
-		o.Cons = append(o.Cons, "Less than 2 replicas")
+		o.Cautions = append(o.Cautions, "Less than 2 replicas")
+		o.Flags[appmodel.F_SINGLE_REPLICA] = true
+		o.Flags[appmodel.F_MANY_REPLICAS] = false
 	} else if app.Metrics.AverageReplicas >= 7 {
 		o.Rating += 20
 		o.Confidence += 30
-		o.Pros = append(o.Pros, "7 or more replicas")
+		o.Flags[appmodel.F_SINGLE_REPLICA] = false
+		o.Flags[appmodel.F_MANY_REPLICAS] = true
 	} else if app.Metrics.AverageReplicas >= 3 {
 		o.Rating += 10
 		o.Confidence += 10
+		o.Flags[appmodel.F_SINGLE_REPLICA] = false
+		o.Flags[appmodel.F_MANY_REPLICAS] = false
+	}
+
+	// finalize blockers
+	if len(o.Blockers) > 0 {
+		o.Rating = -100
+		o.Confidence = 100
 	}
 
 	// bound rating and confidence

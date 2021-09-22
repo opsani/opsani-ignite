@@ -326,7 +326,6 @@ func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValu
 		}
 		if err != nil {
 			log.Errorf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
-			app.Analysis.Cons = append(app.Analysis.Cons, fmt.Sprintf("Failed to collect deployment details: %v", err))
 		}
 
 		//log.Tracef("%#v\n\n", app)
@@ -356,7 +355,6 @@ func collectSingleApp(ctx context.Context, promApi v1.API, namespace string, tim
 	}
 	if err != nil {
 		log.Errorf("Failed to collect deployment details for app %v: %v\n", app.Metadata, err)
-		app.Analysis.Cons = append(app.Analysis.Cons, fmt.Sprintf("Failed to collect deployment details: %v", err))
 	}
 
 	//log.Tracef("%#v\n\n", app)
