@@ -5,6 +5,7 @@ import (
 )
 
 var replicaCountTemplate *template.Template
+var containerRestartsTemplate *template.Template
 var cpuUtilizationTemplate *template.Template
 var memoryUtilizationTemplate *template.Template
 var containerInfoTemplate *template.Template
@@ -15,7 +16,8 @@ var containerMemoryUseTemplate *template.Template
 var containerCpuSaturationTemplate *template.Template
 var containerMemorySaturationTemplate *template.Template
 var containerCpuSecondsThrottledTemplate *template.Template
-var containerRestartsTemplate *template.Template
+var containerRxPacketsTemplate *template.Template
+var containerTxPacketsTemplate *template.Template
 
 // Useful References:
 //
@@ -29,8 +31,13 @@ var containerRestartsTemplate *template.Template
 //   https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/resource_management_guide/sec-cpu
 
 func initializeTemplates() {
+	// replica count (averaged over the range)
 	replicaCountTemplate = template.Must(template.New("prometheusPodAverageReplicas").Parse(
 		`kube_deployment_status_replicas{namespace="{{ .Namespace }}", deployment="{{ .Workload }}"}`))
+
+	// container restarts
+	containerRestartsTemplate = template.Must(template.New("prometheusRestartsTemplate").Parse(
+		`avg by (container) (kube_pod_container_status_restarts_total{ {{ .PodSelector }} })`))
 
 	// old style, pod-aggregated (but may be less precise)
 	cpuUtilizationTemplate = template.Must(template.New("prometheusPodCpuUtilization").Parse(
@@ -67,7 +74,11 @@ func initializeTemplates() {
 	// container Memory-specifics
 	// TODO (e.g., oom kill count, maybe from kube_pod_container_status_terminated_reason)
 
-	// container restarts
-	containerRestartsTemplate = template.Must(template.New("prometheusRestartsTemplate").Parse(
-		`avg by (container) (kube_pod_container_status_restarts_total{ {{ .PodSelector }} })`))
+	// container network traffic
+	// note: network stats are per pod (container="POD"), not per container
+	containerRxPacketsTemplate = template.Must(template.New("prometheusContainerRxPacketsTemplate").Parse(
+		`avg (rate(container_network_receive_packets_total{ {{ .PodSelector }} }[5m]))`))
+	containerTxPacketsTemplate = template.Must(template.New("prometheusContainerTxPacketsTemplate").Parse(
+		`avg (rate(container_network_transmit_packets_total{ {{ .PodSelector }} }[5m]))`))
+
 }

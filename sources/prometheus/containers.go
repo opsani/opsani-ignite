@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	appmodel "opsani-ignite/app/model"
+	opsmath "opsani-ignite/math"
 	"reflect"
 	"strings"
 	"text/template"
@@ -281,6 +282,10 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 		app.Containers = append(app.Containers, container)
 	}
 
+	// Get restart counts
+	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerRestartsTemplate, &selectors, "", "RestartCount")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "restart counts")
+
 	// --- Get resource specifications
 
 	// Get resource requests
@@ -309,9 +314,17 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerCpuSecondsThrottledTemplate, &selectors, "Cpu", "SecondsThrottled")
 	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "CPU throttling")
 
-	// Get restart counts
-	warnings, err = getContainersUse(ctx, promApi, app, timeRange, containerRestartsTemplate, &selectors, "", "RestartCount")
-	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "restart counts")
+	// Get network traffic stats (pod-level, not container-level)
+	rxRate, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, containerRxPacketsTemplate, &selectors)
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "Received packets rate")
+	txRate, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, containerTxPacketsTemplate, &selectors)
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "Received packets rate")
+	if rxRate != nil {
+		app.Metrics.PacketReceiveRate = opsmath.MagicRound(*rxRate)
+	}
+	if txRate != nil {
+		app.Metrics.PacketTransmitRate = opsmath.MagicRound(*txRate)
+	}
 
 	log.Tracef("App %v has %v container(s): %v", app.Metadata, len(app.Containers), app.Containers)
 

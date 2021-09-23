@@ -93,8 +93,8 @@ func (table *AppTable) outputTableHeader() {
 	const RIGHT = tablewriter.ALIGN_RIGHT
 	const LEFT = tablewriter.ALIGN_LEFT
 
-	table.t.SetHeader([]string{"Namespace", "Deployment", "QoS Class", "Instances", "CPU", "Mem", "Opportunity", "Flags"})
-	table.t.SetColumnAlignment([]int{LEFT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT, LEFT})
+	table.t.SetHeader([]string{"Efficiency\nScore", "Namespace", "Deployment", "QoS Class", "Instances", "CPU", "Mem", "Opportunity", "Flags"})
+	table.t.SetColumnAlignment([]int{RIGHT, LEFT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT, LEFT})
 	table.t.SetFooter([]string{})
 	table.t.SetCenterSeparator("")
 	table.t.SetColumnSeparator("")
@@ -106,6 +106,7 @@ func (table *AppTable) outputTableHeader() {
 func (table *AppTable) outputTableApp(app *appmodel.App) {
 	reason, color := appOpportunityAndColor(app)
 	rowValues := []string{
+		fmt.Sprintf("%3d", app.Analysis.EfficiencyScore),
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
 		app.Settings.QosClass,
@@ -146,6 +147,7 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	table.t.Rich([]string{"Main Container", app.Analysis.MainContainer}, nil)
 	table.t.Rich([]string{"Pod QoS Class", app.Settings.QosClass}, nil)
 
+	table.t.Rich([]string{"Efficiency Score", fmt.Sprintf("%4d", app.Analysis.EfficiencyScore)}, appColors)
 	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Analysis.Rating)}, appColors)
 	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Analysis.Confidence)}, appColors)
 
@@ -161,10 +163,11 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	}
 
 	//table.Rich(blank, nil)
-	table.t.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.1g", app.Metrics.AverageReplicas)}, nil)
+	table.t.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.1f", app.Metrics.AverageReplicas)}, nil)
 	table.t.Rich([]string{"Container Count", fmt.Sprintf("%3d", len(app.Containers))}, nil)
 	table.t.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
 	table.t.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
+	table.t.Rich([]string{"Network Traffic (approx.)", fmt.Sprintf("%3.1f qps", app.Metrics.RequestRate)}, nil)
 	table.t.Rich([]string{"Opsani Flags", flagsString(app.Analysis.Flags)}, nil)
 
 	table.t.Rich(blank, nil)

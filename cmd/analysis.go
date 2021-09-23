@@ -16,6 +16,11 @@ import (
 	opsmath "opsani-ignite/math"
 )
 
+const (
+	CPU_WEIGHT = 0.6
+	MEM_WEIGHT = 0.4
+)
+
 type ResourceUtilizationRating struct {
 	UtilizationFloor float64
 	RatingBump       int
@@ -274,6 +279,7 @@ func preAnalyzeApp(app *appmodel.App) {
 		}
 	}
 
+	// validate or determine QoS
 	computedQos := computePodQoS(app)
 	if app.Settings.QosClass == "" {
 		app.Settings.QosClass = computedQos
@@ -281,6 +287,19 @@ func preAnalyzeApp(app *appmodel.App) {
 		log.Warnf("Computed QoS class %q does not match discovered QoS class %q for app %v; assuming the latter",
 			computedQos, app.Settings.QosClass, app.Metadata)
 	}
+
+	// validate or determine request rate
+	// Notes:
+	// - packet rate can be used as a proxy to requests per second
+	// - bidirectional traffic is required to consider traffic as requests/replies
+	computedRps := 0.0
+	if app.Metrics.PacketReceiveRate > 0 && app.Metrics.PacketTransmitRate > 0 {
+		computedRps = app.Metrics.PacketReceiveRate // packets received ≈ requests
+	}
+	if app.Metrics.RequestRate == 0 {
+		app.Metrics.RequestRate = opsmath.MagicRound(computedRps)
+	}
+
 }
 
 func efficiencyImprovementEstimate(app *appmodel.App) string {
@@ -337,7 +356,7 @@ func analyzeApp(app *appmodel.App) {
 		o.Blockers = append(o.Blockers, msg)
 	}
 
-	// analyze utilization
+	// analyze resource utilization
 	o.Flags[appmodel.F_UTILIZATION] = app.Metrics.CpuUtilization > 0 && app.Metrics.MemoryUtilization > 0
 	utilBump := utilizationCombinedRating(app.Metrics.CpuUtilization, app.Metrics.MemoryUtilization)
 	if utilBump != 0 {
@@ -356,6 +375,24 @@ func analyzeApp(app *appmodel.App) {
 		} else if utilBump == 0 {
 			o.Cautions = append(o.Cautions, "Idle application")
 			o.Flags[appmodel.F_BURST] = false
+		}
+	}
+
+	// compute scores
+	o.EfficiencyScore = int(math.Round(app.Metrics.CpuUtilization*CPU_WEIGHT + app.Metrics.MemoryUtilization*MEM_WEIGHT))
+
+	// analyze request rate
+	if app.Metrics.RequestRate == 0 {
+		o.Blockers = append(o.Blockers, "No requests are being processed")
+		o.Flags[appmodel.F_TRAFFIC] = false
+	} else if app.Metrics.RequestRate < 2 {
+		o.Cautions = append(o.Cautions, "Low request rate")
+		o.Rating -= 10
+		// note: don't set traffic flag
+	} else {
+		o.Flags[appmodel.F_TRAFFIC] = true
+		if app.Metrics.RequestRate > 100 {
+			o.Rating += 10 // low confidence as we don't know if traffic is served or originated
 		}
 	}
 

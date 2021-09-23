@@ -2,6 +2,10 @@
 # Analysis sample output (temp)
 samples/
 
+# log & output files used in dev/test
+*.log
+*.out
+
 # goreleaser files
 dist/
 

@@ -51,10 +51,12 @@ type AppContainer struct {
 }
 
 type AppMetrics struct {
-	AverageReplicas   float64 `yaml:"average_replicas"`
-	CpuUtilization    float64 `yaml:"cpu_saturation"` // aka Saturation, %
-	MemoryUtilization float64 `yaml:"memory_saturation"`
-	// TODO: add network traffic, esp. indication of traffic
+	AverageReplicas    float64 `yaml:"average_replicas"`     // averaged over the evaluated time range
+	CpuUtilization     float64 `yaml:"cpu_saturation"`       // aka Saturation, in percent, can be 0 or >100
+	MemoryUtilization  float64 `yaml:"memory_saturation"`    // aka Saturation, in percent, can be 0 or >100
+	PacketReceiveRate  float64 `yaml:"packet_receive_rate"`  // per second
+	PacketTransmitRate float64 `yaml:"packet_transmit_rate"` // per second
+	RequestRate        float64 `yaml:"request_rate"`         // per second
 }
 
 type AppFlag int
@@ -75,13 +77,16 @@ func (f AppFlag) String() string {
 }
 
 type AppAnalysis struct {
-	Rating        int              `yaml:"rating"`         // how suitable for optimization
-	Confidence    int              `yaml:"confidence"`     // how confident is the rating
-	MainContainer string           `yaml:"main_container"` // container to optimize or empty if not identified
-	Flags         map[AppFlag]bool `yaml:"flags"`          // flags
-	Opportunities []string         `yaml:"opportunities"`  // list of optimization opportunities
-	Cautions      []string         `yaml:"cautions"`       // list of concerns/cautions
-	Blockers      []string         `yaml:"blockers"`       // list of blockers prevention optimization
+	Rating           int              `yaml:"rating"`         // how suitable for optimization
+	Confidence       int              `yaml:"confidence"`     // how confident is the rating
+	MainContainer    string           `yaml:"main_container"` // container to optimize or empty if not identified
+	EfficiencyScore  int              `yaml:"efficiency_score"`
+	ReliabilityScore int              `yaml:"reliability_score,omitempty"`
+	PerformanceScore int              `yaml:"performance_score,omitempty"`
+	Flags            map[AppFlag]bool `yaml:"flags"`         // flags
+	Opportunities    []string         `yaml:"opportunities"` // list of optimization opportunities
+	Cautions         []string         `yaml:"cautions"`      // list of concerns/cautions
+	Blockers         []string         `yaml:"blockers"`      // list of blockers prevention optimization
 }
 
 type App struct {

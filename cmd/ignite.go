@@ -51,6 +51,13 @@ func isQualifiedApp(app *appmodel.App) bool {
 }
 
 func runIgnite(cmd *cobra.Command, args []string) {
+	// set up logging
+	logFile, err := os.OpenFile("opsani-ignite.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening log file: %v", err)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
 	if showDebug {
 		log.SetLevel(log.TraceLevel)
 	} else if suppressWarnings {
@@ -60,6 +67,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	}
 
 	log.Printf("Using Prometheus API at %q\n", promUri)
+	fmt.Fprintf(os.Stderr, "Using Prometheus API at %q\n", promUri)
 
 	// Create root context
 	ctx := context.Background()
@@ -106,6 +114,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		if qualified == 0 && deployment == "" { // if a deployment is specified, it will be shown anyway
 			showAllApps = true
 			log.Infof("No highly rated applications found. Showing all applications")
+			fmt.Fprintf(os.Stderr, "No highly rated applications found. Showing all applications")
 		}
 	}
 
@@ -124,7 +133,8 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	}
 	display.WriteOut(table)
 	if skipped > 0 {
-		log.Infof("%v applications were not shown due to low rating. Use --show-all to see all apps", skipped)
+		log.Infof("%v applications were not shown due to low rating", skipped)
+		fmt.Fprintf(os.Stderr, "%v applications were not shown due to low rating. Use --show-all to see all apps", skipped)
 	}
 
 }
