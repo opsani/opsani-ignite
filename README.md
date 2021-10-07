@@ -7,7 +7,7 @@ CAUTION: Opsani Ignite is a new tool, still in alpha testing. We appreciate feed
 
 [![Release](https://img.shields.io/github/release/opsani/opsani-ignite.svg?style=for-the-badge)](https://github.com/opsani/opsani-ignite/releases/latest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/opsani/opsani-ignite?style=for-the-badge)](https://goreportcard.com/report/github.com/opsani/opsani-ignite)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE.md)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
 [![stability-alpha](https://img.shields.io/badge/stability-alpha-f4d03f.svg?style=for-the-badge)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#alpha)
 [![Github All Releases](https://img.shields.io/github/downloads/opsani/opsani-ignite/total.svg?style=for-the-badge)](https://github.com/opsani/opsani-ignite/releases/latest)
 
