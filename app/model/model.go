@@ -1,5 +1,7 @@
 package model
 
+import "fmt"
+
 const (
 	QOS_GUARANTEED = "guaranteed"
 	QOS_BURSTABLE  = "burstable"
@@ -51,42 +53,67 @@ type AppContainer struct {
 }
 
 type AppMetrics struct {
-	AverageReplicas    float64 `yaml:"average_replicas"`     // averaged over the evaluated time range
-	CpuUtilization     float64 `yaml:"cpu_saturation"`       // aka Saturation, in percent, can be 0 or >100
-	MemoryUtilization  float64 `yaml:"memory_saturation"`    // aka Saturation, in percent, can be 0 or >100
-	PacketReceiveRate  float64 `yaml:"packet_receive_rate"`  // per second
-	PacketTransmitRate float64 `yaml:"packet_transmit_rate"` // per second
-	RequestRate        float64 `yaml:"request_rate"`         // per second
+	AverageReplicas     float64 `yaml:"average_replicas"`      // averaged over the evaluated time range
+	CpuUtilization      float64 `yaml:"cpu_saturation"`        // aka Saturation, in percent, can be 0 or >100
+	MemoryUtilization   float64 `yaml:"memory_saturation"`     // aka Saturation, in percent, can be 0 or >100
+	CpuSecondsThrottled float64 `yaml:"cpu_seconds_throttled"` // sum of seconds throttled/second across all containers
+	PacketReceiveRate   float64 `yaml:"packet_receive_rate"`   // per second
+	PacketTransmitRate  float64 `yaml:"packet_transmit_rate"`  // per second
+	RequestRate         float64 `yaml:"request_rate"`          // per second
 }
 
 type AppFlag int
 
 const (
-	F_WRITEABLE_VOLUME = iota
+	F_MAIN_CONTAINER = iota
+	F_WRITEABLE_VOLUME
 	F_RESOURCE_SPEC
-	F_SINGLE_REPLICA
-	F_MANY_REPLICAS
-	F_TRAFFIC
+	F_RESOURCE_LIMITS
+	F_RESOURCE_GUARANTEED
 	F_UTILIZATION
 	F_BURST
-	F_MAIN_CONTAINER
+	F_TRAFFIC
+	F_SINGLE_REPLICA
+	F_MANY_REPLICAS
 )
 
 func (f AppFlag) String() string {
-	return []string{"V", "R", "S", "M", "T", "U", "B", "C"}[f]
+	return []string{"C", "V", "R", "L", "G", "U", "B", "T", "S", "M"}[f]
+}
+
+func (f AppFlag) MarshalYAML() (interface{}, error) {
+	return f.String(), nil
+}
+
+type RiskLevel int
+
+const (
+	RISK_UNKNOWN = iota
+	RISK_NONE
+	RISK_LOW
+	RISK_MEDIUM
+	RISK_HIGH
+	RISK_CRITICAL
+)
+
+func (r RiskLevel) String() string {
+	return []string{"-", "None", "Low", "Medium", "High", "Critical"}[r]
+}
+
+func (r RiskLevel) MarshalYAML() (interface{}, error) {
+	return r.String(), nil
 }
 
 type AppAnalysis struct {
-	Rating           int              `yaml:"rating"`         // how suitable for optimization
-	Confidence       int              `yaml:"confidence"`     // how confident is the rating
-	MainContainer    string           `yaml:"main_container"` // container to optimize or empty if not identified
-	EfficiencyScore  int              `yaml:"efficiency_score"`
-	ReliabilityScore int              `yaml:"reliability_score,omitempty"`
-	PerformanceScore int              `yaml:"performance_score,omitempty"`
-	Flags            map[AppFlag]bool `yaml:"flags"`         // flags
-	Opportunities    []string         `yaml:"opportunities"` // list of optimization opportunities
-	Cautions         []string         `yaml:"cautions"`      // list of concerns/cautions
-	Blockers         []string         `yaml:"blockers"`      // list of blockers prevention optimization
+	Rating          int              `yaml:"rating"`         // how suitable for optimization
+	Confidence      int              `yaml:"confidence"`     // how confident is the rating
+	MainContainer   string           `yaml:"main_container"` // container to optimize or empty if not identified
+	EfficiencyScore *int             `yaml:"efficiency_score"`
+	ReliabilityRisk *RiskLevel       `yaml:"reliability_risk"`
+	Flags           map[AppFlag]bool `yaml:"flags"`         // flags
+	Opportunities   []string         `yaml:"opportunities"` // list of optimization opportunities
+	Cautions        []string         `yaml:"cautions"`      // list of concerns/cautions
+	Blockers        []string         `yaml:"blockers"`      // list of blockers prevention optimization
 }
 
 type App struct {
@@ -108,4 +135,17 @@ func (app *App) ContainerIndexByName(name string) (index int, ok bool) {
 		}
 	}
 	return
+}
+
+func Score2String(s *int) string {
+	if s == nil {
+		return "n/a"
+	}
+	return fmt.Sprintf("%v", *s)
+}
+func Risk2String(r *RiskLevel) string {
+	if r == nil {
+		return "n/a"
+	}
+	return r.String()
 }

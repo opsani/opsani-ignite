@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/common/model"
 
 	appmodel "opsani-ignite/app/model"
+	opsmath "opsani-ignite/math"
 )
 
 // Example API usage: https://github.com/prometheus/client_golang/blob/master/api/prometheus/v1/example_test.go
@@ -32,35 +33,6 @@ import (
 type QuerySelectors struct {
 	appmodel.AppMetadata
 	PodSelector string
-}
-
-func min(samples ...float64) float64 {
-	min := samples[0]
-	for _, val := range samples[1:] {
-		if val < min {
-			min = val
-		}
-	}
-	return min
-}
-
-func sum(samples ...float64) float64 {
-	total := 0.0
-	for _, val := range samples {
-		total += val
-	}
-	return total
-}
-
-func avg(samples ...float64) float64 {
-	if len(samples) == 0 {
-		return 0.0
-	}
-	total := 0.0
-	for _, val := range samples {
-		total += val
-	}
-	return total / float64(len(samples))
 }
 
 func createAPI(uri *url.URL) (v1.API, error) {
@@ -144,9 +116,9 @@ func getAggregateMetric(ctx context.Context, promApi v1.API, app *appmodel.App, 
 	var value float64
 	switch aggrFunc {
 	case "min":
-		value = min(values...)
+		value = opsmath.Min(values...)
 	case "sum":
-		value = sum(values...)
+		value = opsmath.Sum(values...)
 	default:
 		return nil, warnings, fmt.Errorf("Query %q uses not-yet-supported aggregation function %q", query, aggrFunc)
 	}
@@ -201,7 +173,7 @@ func getRangedMetric(ctx context.Context, promApi v1.API, app *appmodel.App, tim
 	for _, v := range series[0].Values {
 		values = append(values, float64(v.Value)) // ignoring Timestamps
 	}
-	value := avg(values...) // prepared for other aggregations
+	value := opsmath.Avg(values...) // prepared for other aggregations
 
 	return &value, warnings, nil
 }

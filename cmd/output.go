@@ -89,12 +89,54 @@ func flagsString(flags map[appmodel.AppFlag]bool) (ret string) {
 	return
 }
 
-func (table *AppTable) outputTableHeader() {
-	const RIGHT = tablewriter.ALIGN_RIGHT
-	const LEFT = tablewriter.ALIGN_LEFT
+func riskColor(r *appmodel.RiskLevel) int {
+	color := 0 // neutral
+	if r == nil {
+		return color
+	}
+	switch *r {
+	case appmodel.RISK_LOW:
+		color = tablewriter.FgGreenColor
+	case appmodel.RISK_MEDIUM:
+		color = tablewriter.FgYellowColor
+	case appmodel.RISK_HIGH:
+		color = tablewriter.FgRedColor
+	}
+	return color
+}
 
-	table.t.SetHeader([]string{"Efficiency\nScore", "Namespace", "Deployment", "QoS Class", "Instances", "CPU", "Mem", "Opportunity", "Flags"})
-	table.t.SetColumnAlignment([]int{RIGHT, LEFT, LEFT, LEFT, RIGHT, RIGHT, RIGHT, LEFT, LEFT})
+type HeaderInfo struct {
+	Title     string
+	Alignment int
+}
+
+func getHeadersInfo() []HeaderInfo {
+	const LEFT = tablewriter.ALIGN_LEFT
+	const CENTER = tablewriter.ALIGN_CENTER
+	const RIGHT = tablewriter.ALIGN_RIGHT
+
+	return []HeaderInfo{
+		{"Namespace", LEFT},
+		{"Deployment", LEFT},
+		{"Efficiency\nScore", RIGHT},
+		{"Reliability\nRisk", CENTER},
+		{"Instances", RIGHT},
+		{"CPU", RIGHT},
+		{"Mem", RIGHT},
+		{"Opportunity", LEFT},
+		{"Flags", LEFT},
+	}
+}
+
+func (table *AppTable) outputTableHeader() {
+	var headers []string
+	var alignments []int
+	for _, header := range getHeadersInfo() {
+		headers = append(headers, header.Title)
+		alignments = append(alignments, header.Alignment)
+	}
+	table.t.SetHeader(headers)
+	table.t.SetColumnAlignment(alignments)
 	table.t.SetFooter([]string{})
 	table.t.SetCenterSeparator("")
 	table.t.SetColumnSeparator("")
@@ -106,10 +148,10 @@ func (table *AppTable) outputTableHeader() {
 func (table *AppTable) outputTableApp(app *appmodel.App) {
 	reason, color := appOpportunityAndColor(app)
 	rowValues := []string{
-		fmt.Sprintf("%3d", app.Analysis.EfficiencyScore),
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
-		app.Settings.QosClass,
+		fmt.Sprintf("%3v", appmodel.Score2String(app.Analysis.EfficiencyScore)),
+		fmt.Sprintf("%v", appmodel.Risk2String(app.Analysis.ReliabilityRisk)),
 		fmt.Sprintf("%.0fx%d", app.Metrics.AverageReplicas, len(app.Containers)),
 		fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization),
 		fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization),
@@ -140,6 +182,7 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	opportunityColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
 	cautionColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgYellowColor}}
 	blockerColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
+	riskColors := []tablewriter.Colors{[]int{0}, []int{riskColor(app.Analysis.ReliabilityRisk)}}
 
 	table.t.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
 	table.t.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
@@ -147,7 +190,8 @@ func (table *AppTable) outputDetailApp(app *appmodel.App) {
 	table.t.Rich([]string{"Main Container", app.Analysis.MainContainer}, nil)
 	table.t.Rich([]string{"Pod QoS Class", app.Settings.QosClass}, nil)
 
-	table.t.Rich([]string{"Efficiency Score", fmt.Sprintf("%4d", app.Analysis.EfficiencyScore)}, appColors)
+	table.t.Rich([]string{"Efficiency Score", fmt.Sprintf("%4v", appmodel.Score2String(app.Analysis.EfficiencyScore))}, appColors)
+	table.t.Rich([]string{"Reliability Risk", fmt.Sprintf("%v", appmodel.Risk2String(app.Analysis.ReliabilityRisk))}, riskColors)
 	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Analysis.Rating)}, appColors)
 	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Analysis.Confidence)}, appColors)
 

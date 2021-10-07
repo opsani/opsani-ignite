@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -226,6 +227,16 @@ func computePodQoS(app *appmodel.App) string {
 	}
 }
 
+func resourcesLimited(app *appmodel.App) bool {
+	for i := range app.Containers {
+		c := &app.Containers[i]
+		if c.Cpu.Limit == 0 || c.Memory.Limit == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func resourcesExplicitlyDefined(app *appmodel.App) (bool, string) {
 	// select the main container
 	if app.Analysis.MainContainer == "" {
@@ -322,6 +333,49 @@ func efficiencyImprovementEstimate(app *appmodel.App) string {
 	}
 }
 
+func bumpRisk(prior *appmodel.RiskLevel, level appmodel.RiskLevel) *appmodel.RiskLevel {
+	if prior == nil {
+		return &level
+	}
+	if level > *prior {
+		return &level
+	}
+	return prior
+}
+
+func riskAssessment(app *appmodel.App) (*appmodel.RiskLevel, []string) {
+	var risk *appmodel.RiskLevel
+	msg := []string{}
+
+	if app.Settings.QosClass == appmodel.QOS_BESTEFFORT {
+		risk = bumpRisk(risk, appmodel.RISK_HIGH)
+		msg = append(msg, "Pod QoS class is Best Effort")
+	} else if app.Settings.QosClass != appmodel.QOS_GUARANTEED {
+		risk = bumpRisk(risk, appmodel.RISK_MEDIUM)
+		msg = append(msg, fmt.Sprintf("Pod QOS class is %v", strings.Title(app.Settings.QosClass)))
+	}
+
+	if app.Metrics.CpuUtilization >= 200 ||
+		app.Metrics.MemoryUtilization >= 200 ||
+		app.Metrics.CpuSecondsThrottled >= 0.7 {
+		risk = bumpRisk(risk, appmodel.RISK_HIGH)
+		msg = append(msg, "Resource utilization significantly exceeds allocation")
+	} else if app.Metrics.CpuUtilization > 120 ||
+		app.Metrics.MemoryUtilization > 120 ||
+		app.Metrics.CpuSecondsThrottled > 0.25 {
+		risk = bumpRisk(risk, appmodel.RISK_HIGH)
+		msg = append(msg, "Resource utilization exceeds allocation")
+	} else if app.Metrics.CpuUtilization > 90 ||
+		app.Metrics.MemoryUtilization > 90 ||
+		app.Metrics.CpuSecondsThrottled > 0.1 {
+		risk = bumpRisk(risk, appmodel.RISK_MEDIUM)
+		msg = append(msg, "Resource utilization close to allocation")
+	}
+
+	risk = bumpRisk(risk, appmodel.RISK_LOW) // in case not set yet
+	return risk, msg
+}
+
 func analyzeApp(app *appmodel.App) {
 	// finalize basis and prepare for analysis
 	preAnalyzeApp(app)
@@ -348,7 +402,17 @@ func analyzeApp(app *appmodel.App) {
 		o.Flags[appmodel.F_WRITEABLE_VOLUME] = false
 	}
 
-	// missing resource specification (main container has no QoS)
+	// resource specification flags
+	if app.Settings.QosClass == appmodel.QOS_GUARANTEED {
+		o.Flags[appmodel.F_RESOURCE_GUARANTEED] = true
+	} else {
+		o.Flags[appmodel.F_RESOURCE_GUARANTEED] = false
+	}
+	if resourcesLimited(app) {
+		o.Flags[appmodel.F_RESOURCE_LIMITS] = true
+	} else {
+		o.Flags[appmodel.F_RESOURCE_LIMITS] = false
+	}
 	if resGood, msg := resourcesExplicitlyDefined(app); resGood {
 		o.Flags[appmodel.F_RESOURCE_SPEC] = true
 	} else {
@@ -378,8 +442,20 @@ func analyzeApp(app *appmodel.App) {
 		}
 	}
 
-	// compute scores
-	o.EfficiencyScore = int(math.Round(app.Metrics.CpuUtilization*CPU_WEIGHT + app.Metrics.MemoryUtilization*MEM_WEIGHT))
+	// compute efficiency score
+	if app.Metrics.MemoryUtilization == 0 {
+		o.EfficiencyScore = nil // something is wrong - this app likely not functioning or we don't have metrics
+	} else if app.Metrics.CpuUtilization == 0 {
+		// idle apps are inefficient by definition
+		score := 0
+		o.EfficiencyScore = &score
+	} else {
+		cpuSat := opsmath.Min(app.Metrics.CpuUtilization, 100)    // cap utilization for efficiency calc
+		memSat := opsmath.Min(app.Metrics.MemoryUtilization, 100) // " "
+		// score can be assigned only if the app is not bursting
+		score := int(math.Round(cpuSat*CPU_WEIGHT + memSat*MEM_WEIGHT))
+		o.EfficiencyScore = &score
+	}
 
 	// analyze request rate
 	if app.Metrics.RequestRate == 0 {
@@ -408,12 +484,19 @@ func analyzeApp(app *appmodel.App) {
 		o.Confidence += 30
 		o.Flags[appmodel.F_SINGLE_REPLICA] = false
 		o.Flags[appmodel.F_MANY_REPLICAS] = true
-	} else if app.Metrics.AverageReplicas >= 3 {
-		o.Rating += 10
-		o.Confidence += 10
+	} else {
+		if app.Metrics.AverageReplicas > 3 {
+			o.Rating += 10
+			o.Confidence += 10
+		}
 		o.Flags[appmodel.F_SINGLE_REPLICA] = false
 		o.Flags[appmodel.F_MANY_REPLICAS] = false
 	}
+
+	// perform risk assessment
+	riskCautions := []string{}
+	o.ReliabilityRisk, riskCautions = riskAssessment(app)
+	o.Cautions = append(o.Cautions, riskCautions...)
 
 	// finalize blockers
 	if len(o.Blockers) > 0 {
