@@ -494,7 +494,7 @@ func analyzeApp(app *appmodel.App) {
 	}
 
 	// perform risk assessment
-	riskCautions := []string{}
+	var riskCautions []string
 	o.ReliabilityRisk, riskCautions = riskAssessment(app)
 	o.Cautions = append(o.Cautions, riskCautions...)
 

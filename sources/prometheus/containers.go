@@ -318,7 +318,7 @@ func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.Ap
 	rxRate, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, containerRxPacketsTemplate, &selectors)
 	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "Received packets rate")
 	txRate, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, containerTxPacketsTemplate, &selectors)
-	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "Received packets rate")
+	allWarnings = handleWarnErr(allWarnings, warnings, err, app, "Transmitted packets rate")
 	if rxRate != nil {
 		app.Metrics.PacketReceiveRate = opsmath.MagicRound(*rxRate)
 	}

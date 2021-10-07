@@ -4,7 +4,7 @@ import (
 	m "math"
 )
 
-// round to whole numbers or up to 4 significant digits
+// MagicRound rounds to whole numbers or up to 4 significant digits
 func MagicRound(x float64) float64 {
 	if x == 0 {
 		return 0

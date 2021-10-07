@@ -77,8 +77,8 @@ func getAggregateMetric(ctx context.Context, promApi v1.API, app *appmodel.App, 
 	defer cancel()
 
 	// prepare query string
-	pod_re := fmt.Sprintf("%v-.*", app.Metadata.Workload) // pod naming template is <deployment_name>-<pod_spec_hash>-<pod_unique_id> - TODO: tighten RE to avoid unlikelyconflicts
-	query := fmt.Sprintf("%v(%v{namespace=%q,pod=~%q})", aggrFunc, metric, app.Metadata.Namespace, pod_re)
+	podRE := fmt.Sprintf("%v-.*", app.Metadata.Workload) // pod naming template is <deployment_name>-<pod_spec_hash>-<pod_unique_id> - TODO: tighten RE to avoid unlikelyconflicts
+	query := fmt.Sprintf("%v(%v{namespace=%q,pod=~%q})", aggrFunc, metric, app.Metadata.Namespace, podRE)
 
 	// Collect values
 	result, warnings, err := promApi.QueryRange(ctx, query, timeRange)
@@ -232,7 +232,7 @@ func collectDeploymentDetails(ctx context.Context, promApi v1.API, app *appmodel
 	}
 
 	// collect usage
-	cpu_used, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, cpuUtilizationTemplate, &selectors)
+	cpuUsed, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, cpuUtilizationTemplate, &selectors)
 	if err != nil {
 		log.Errorf("Error querying Prometheus for CPU utilization %v: %v\n", app.Metadata, err)
 	} else {
@@ -240,11 +240,11 @@ func collectDeploymentDetails(ctx context.Context, promApi v1.API, app *appmodel
 			allWarnings = append(allWarnings, warnings...)
 			log.Warnf("Warnings during cpu utilization collection: %v\n", warnings)
 		}
-		if cpu_used != nil {
-			app.Metrics.CpuUtilization = *cpu_used
+		if cpuUsed != nil {
+			app.Metrics.CpuUtilization = *cpuUsed
 		}
 	}
-	memory_used, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, memoryUtilizationTemplate, &selectors)
+	memoryUsed, warnings, err := getRangedMetric(ctx, promApi, app, timeRange, memoryUtilizationTemplate, &selectors)
 	if err != nil {
 		log.Errorf("Error querying Prometheus for memory utilization %v: %v\n", app.Metadata, err)
 	} else {
@@ -252,8 +252,8 @@ func collectDeploymentDetails(ctx context.Context, promApi v1.API, app *appmodel
 			allWarnings = append(allWarnings, warnings...)
 			log.Warnf("Warnings during memory utilization collection: %v\n", warnings)
 		}
-		if memory_used != nil {
-			app.Metrics.MemoryUtilization = *memory_used
+		if memoryUsed != nil {
+			app.Metrics.MemoryUtilization = *memoryUsed
 		}
 	}
 
