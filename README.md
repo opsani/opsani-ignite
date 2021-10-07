@@ -6,9 +6,9 @@ and identifies the opportunities for optimization.
 CAUTION: Opsani Ignite is a new tool, still in alpha testing. We appreciate feedback and suggestions.
 
 [![Release](https://img.shields.io/github/release/goreleaser/goreleaser.svg?style=for-the-badge)](https://github.com/opsani/opsani-ignite/releases/latest)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.md)
-[![Go Report Card](https://goreportcard.com/badge/github.com/opsani/opsani-ignite)](https://goreportcard.com/report/github.com/opsani/opsani-ignite)
-[![Github All Releases](https://img.shields.io/github/downloads/opsani/opsani-ignite/total.svg)]()
+[![Go Report Card](https://goreportcard.com/badge/github.com/opsani/opsani-ignite?style=for-the-badge)](https://goreportcard.com/report/github.com/opsani/opsani-ignite)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE.md)
+[![Github All Releases](https://img.shields.io/github/downloads/opsani/opsani-ignite/total.svg?style=for-the-badge)]()
 
 
 # Install
