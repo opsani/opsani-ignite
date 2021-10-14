@@ -418,6 +418,7 @@ func analyzeApp(app *appmodel.App) {
 	} else {
 		o.Flags[appmodel.F_RESOURCE_SPEC] = false
 		o.Blockers = append(o.Blockers, msg)
+		o.Opportunities = append(o.Opportunities, "Define resource levels to improve reliability")
 	}
 
 	// analyze resource utilization

@@ -43,12 +43,6 @@ func getDisplayMethods() map[string]DisplayMethods {
 func appOpportunityAndColor(app *appmodel.App) (oppty string, color int) {
 	// note: color is among tablewriter colors
 
-	// handle unqualified apps
-	if !isQualifiedApp(app) {
-		color = 0 // keep default color (neutral); alt: tablewriter.FgRedColor
-		return
-	}
-
 	// list opportunities (usually one but allow for multiple)
 	if len(app.Analysis.Opportunities) > 0 {
 		oppty = strings.Join(app.Analysis.Opportunities, "\n")
@@ -57,7 +51,33 @@ func appOpportunityAndColor(app *appmodel.App) (oppty string, color int) {
 	}
 
 	// choose color depending on rating
-	if app.Analysis.Rating >= 50 {
+	if !isQualifiedApp(app) {
+		color = 0 // keep default color (neutral); alt: tablewriter.FgRedColor
+	} else if app.Analysis.Rating >= 50 {
+		color = tablewriter.FgGreenColor
+	} else {
+		color = tablewriter.FgYellowColor
+	}
+
+	return
+}
+
+func appTableColor(app *appmodel.App) (color int) {
+	// note: color is among tablewriter colors
+
+	var risk appmodel.RiskLevel
+	if app.Analysis.ReliabilityRisk != nil {
+		risk = *app.Analysis.ReliabilityRisk
+	} else {
+		risk = appmodel.RISK_UNKNOWN
+	}
+
+	// choose color depending on efficiency and risk
+	if risk == appmodel.RISK_MEDIUM {
+		color = tablewriter.FgRedColor //tablewriter.FgYellowColor
+	} else if risk > appmodel.RISK_MEDIUM {
+		color = tablewriter.FgRedColor
+	} else if app.Analysis.EfficiencyScore != nil && *app.Analysis.EfficiencyScore >= 60 {
 		color = tablewriter.FgGreenColor
 	} else {
 		color = tablewriter.FgYellowColor
@@ -120,7 +140,7 @@ func getHeadersInfo() []HeaderInfo {
 		{"Deployment", LEFT},
 		{"Efficiency\nScore", RIGHT},
 		{"Reliability\nRisk", CENTER},
-		{"Instances", RIGHT},
+		{"Replicas", RIGHT},
 		{"CPU", RIGHT},
 		{"Mem", RIGHT},
 		{"Opportunity", LEFT},
@@ -146,7 +166,8 @@ func (table *AppTable) outputTableHeader() {
 }
 
 func (table *AppTable) outputTableApp(app *appmodel.App) {
-	reason, color := appOpportunityAndColor(app)
+	reason, _ := appOpportunityAndColor(app)
+	color := appTableColor(app)
 	rowValues := []string{
 		app.Metadata.Namespace,
 		app.Metadata.Workload,
