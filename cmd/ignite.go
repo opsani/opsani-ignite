@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -66,22 +67,45 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		log.SetLevel(log.InfoLevel)
 	}
 
-	log.Printf("Using Prometheus API at %q\n", promUri)
-	fmt.Fprintf(os.Stderr, "Using Prometheus API at %q\n", promUri)
+	namespace := ""
+	deployment := ""
+	if len(args) >= 1 {
+		namespace = args[0]
+	}
+	if len(args) >= 2 {
+		deployment = args[1]
+	}
+
+	apiMsg := fmt.Sprintf("Using Prometheus API at %q", promUri)
+	anzMsg := "Analyzing "
+	if namespace != "" {
+		if deployment != "" {
+			anzMsg += fmt.Sprintf("namespace %v, deployment %v", namespace, deployment)
+		} else {
+			anzMsg += fmt.Sprintf("all deployments in namespace %v", namespace)
+		}
+	} else {
+		anzMsg += "all deployments in all non-system namespaces"
+	}
+	anzMsg += fmt.Sprintf(" from %v to %v in %v increments.\n", timeStart.Format(time.RFC3339), timeEnd.Format(time.RFC3339), timeStep)
+	log.Print(apiMsg)
+	fmt.Fprintln(os.Stderr, apiMsg)
+	log.Print(anzMsg)
+	fmt.Fprintln(os.Stderr, anzMsg)
 
 	// Create root context
 	ctx := context.Background()
 
 	// get applications from the cluster
 	prom.Init()
-	apps, err := prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment")
+	apps, err := prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment", timeStart, timeEnd, timeStep)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to obtain data from Prometheus at %q: %v", promUri, err)
 		os.Exit(1)
 	}
 	if len(apps) == 0 {
 		if deployment == "" {
-			fmt.Fprintf(os.Stderr, "No applications found. Try specifying explicit --namespace and, optionally, --deployment to analyze")
+			fmt.Fprintf(os.Stderr, "No applications found. Try specifying explicit namespace and, optionally, deployment to analyze")
 		} else {
 			fmt.Fprintf(os.Stderr, "Application %q not found in namespace %q", deployment, namespace)
 		}
@@ -114,7 +138,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		if qualified == 0 && deployment == "" { // if a deployment is specified, it will be shown anyway
 			showAllApps = true
 			log.Infof("No highly rated applications found. Showing all applications")
-			fmt.Fprintf(os.Stderr, "No highly rated applications found. Showing all applications")
+			fmt.Fprintf(os.Stderr, "No highly rated applications found. Showing all applications\n")
 		}
 	}
 
@@ -134,7 +158,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	display.WriteOut(table)
 	if skipped > 0 {
 		log.Infof("%v applications were not shown due to low rating", skipped)
-		fmt.Fprintf(os.Stderr, "%v applications were not shown due to low rating. Use --show-all to see all apps", skipped)
+		fmt.Fprintf(os.Stderr, "%v applications were not shown due to low rating. Use --show-all to see all apps\n", skipped)
 	}
 
 }

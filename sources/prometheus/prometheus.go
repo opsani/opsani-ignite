@@ -377,7 +377,16 @@ func Init() {
 	initializeTemplates()
 }
 
-func PromGetAll(ctx context.Context, promUri *url.URL, namespace string, workload string, workloadApiVersion string, workloadKind string) ([]*appmodel.App, error) {
+func PromGetAll(
+	ctx context.Context,
+	promUri *url.URL,
+	namespace string,
+	workload string,
+	workloadApiVersion string,
+	workloadKind string,
+	timeStart time.Time,
+	timeEnd time.Time,
+	timeStep time.Duration) ([]*appmodel.App, error) {
 	// set up API client
 	promApi, err := createAPI(promUri)
 	if err != nil {
@@ -385,11 +394,10 @@ func PromGetAll(ctx context.Context, promUri *url.URL, namespace string, workloa
 	}
 
 	// choose a time range
-	now := time.Now()
 	timeRange := v1.Range{
-		Start: now.Add(-time.Hour * 24 * 7),
-		End:   now,
-		Step:  time.Hour * 24, //TODO: TBD
+		Start: timeStart,
+		End:   timeEnd,
+		Step:  timeStep,
 	}
 
 	// Collect namespaces
