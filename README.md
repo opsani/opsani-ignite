@@ -35,4 +35,4 @@ Opsani Ignite records diagnostic information in `opsani-ignite.log`. You can inc
 
 # Where To Get Help
 
-You can reach out to Opsani Technical support at `support <at> opsani <dot> com` or, for faster service, use the chat bot on the [Opsani web site](www.opsani.com).
+You can reach out to Opsani Technical support at `support <at> opsani <dot> com` or, for faster service, use the chat bot on the [Opsani web site](https://www.opsani.com).
