@@ -22,6 +22,7 @@ import (
 type AppTable struct {
 	wr   io.Writer
 	t    tablewriter.Table // table writer, if used
+	i    interactiveState  // interactive app root, if used
 	yaml *yaml.Encoder     // yaml encoder, if used
 }
 
@@ -33,16 +34,47 @@ type DisplayMethods struct {
 
 func getDisplayMethods() map[string]DisplayMethods {
 	return map[string]DisplayMethods{
-		OUTPUT_TABLE:  {(*AppTable).outputTableHeader, (*AppTable).outputTableApp, (*AppTable).outputAnyTableOut},
-		OUTPUT_DETAIL: {(*AppTable).outputDetailHeader, (*AppTable).outputDetailApp, (*AppTable).outputAnyTableOut},
-		OUTPUT_YAML:   {(*AppTable).outputYamlHeader, (*AppTable).outputYamlApp, (*AppTable).outputYamlOut},
-		OUTPUT_SERVO:  {(*AppTable).outputYamlHeader, (*AppTable).outputServoYamlApp, (*AppTable).outputYamlOut},
+		OUTPUT_INTERACTIVE: {(*AppTable).outputInteractiveInit, (*AppTable).outputInteractiveAddApp, (*AppTable).outputInteractiveRun},
+		OUTPUT_TABLE:       {(*AppTable).outputTableHeader, (*AppTable).outputTableApp, (*AppTable).outputAnyTableOut},
+		OUTPUT_DETAIL:      {(*AppTable).outputDetailHeader, (*AppTable).outputDetailApp, (*AppTable).outputAnyTableOut},
+		OUTPUT_YAML:        {(*AppTable).outputYamlHeader, (*AppTable).outputYamlApp, (*AppTable).outputYamlOut},
+		OUTPUT_SERVO:       {(*AppTable).outputYamlHeader, (*AppTable).outputServoYamlApp, (*AppTable).outputYamlOut},
 	}
 }
 
-func appOpportunityAndColor(app *appmodel.App) (oppty string, color int) {
-	// note: color is among tablewriter colors
+const (
+	colorNone = iota
+	colorGreen
+	colorYellow
+	colorRed
+)
 
+const (
+	alignLeft = iota
+	alignCenter
+	alignRight
+)
+
+func tablewriterColor(color int) int {
+	m := map[int]int{
+		colorNone:   0,
+		colorGreen:  tablewriter.FgGreenColor,
+		colorRed:    tablewriter.FgRedColor,
+		colorYellow: tablewriter.FgYellowColor,
+	}
+	return m[color]
+}
+
+func tablewriterAlign(align int) int {
+	m := map[int]int{
+		alignLeft:   tablewriter.ALIGN_LEFT,
+		alignCenter: tablewriter.ALIGN_CENTER,
+		alignRight:  tablewriter.ALIGN_RIGHT,
+	}
+	return m[align]
+}
+
+func appOpportunityAndColor(app *appmodel.App) (oppty string, color int) {
 	// list opportunities (usually one but allow for multiple)
 	if len(app.Analysis.Opportunities) > 0 {
 		oppty = strings.Join(app.Analysis.Opportunities, "\n")
@@ -52,19 +84,17 @@ func appOpportunityAndColor(app *appmodel.App) (oppty string, color int) {
 
 	// choose color depending on rating
 	if !isQualifiedApp(app) {
-		color = 0 // keep default color (neutral); alt: tablewriter.FgRedColor
+		color = colorNone // keep default color (neutral)
 	} else if app.Analysis.Rating >= 50 {
-		color = tablewriter.FgGreenColor
+		color = colorGreen
 	} else {
-		color = tablewriter.FgYellowColor
+		color = colorYellow
 	}
 
 	return
 }
 
 func appTableColor(app *appmodel.App) (color int) {
-	// note: color is among tablewriter colors
-
 	var risk appmodel.RiskLevel
 	if app.Analysis.ReliabilityRisk != nil {
 		risk = *app.Analysis.ReliabilityRisk
@@ -74,13 +104,13 @@ func appTableColor(app *appmodel.App) (color int) {
 
 	// choose color depending on efficiency and risk
 	if risk == appmodel.RISK_MEDIUM {
-		color = tablewriter.FgRedColor //tablewriter.FgYellowColor
+		color = colorYellow
 	} else if risk > appmodel.RISK_MEDIUM {
-		color = tablewriter.FgRedColor
+		color = colorRed
 	} else if app.Analysis.EfficiencyScore != nil && *app.Analysis.EfficiencyScore >= 60 {
-		color = tablewriter.FgGreenColor
+		color = colorGreen
 	} else {
-		color = tablewriter.FgYellowColor
+		color = colorYellow
 	}
 
 	return
@@ -110,17 +140,17 @@ func flagsString(flags map[appmodel.AppFlag]bool) (ret string) {
 }
 
 func riskColor(r *appmodel.RiskLevel) int {
-	color := 0 // neutral
+	color := colorNone // neutral
 	if r == nil {
 		return color
 	}
 	switch *r {
 	case appmodel.RISK_LOW:
-		color = tablewriter.FgGreenColor
+		color = colorGreen
 	case appmodel.RISK_MEDIUM:
-		color = tablewriter.FgYellowColor
+		color = colorYellow
 	case appmodel.RISK_HIGH:
-		color = tablewriter.FgRedColor
+		color = colorRed
 	}
 	return color
 }
@@ -131,20 +161,16 @@ type HeaderInfo struct {
 }
 
 func getHeadersInfo() []HeaderInfo {
-	const LEFT = tablewriter.ALIGN_LEFT
-	const CENTER = tablewriter.ALIGN_CENTER
-	const RIGHT = tablewriter.ALIGN_RIGHT
-
 	return []HeaderInfo{
-		{"Namespace", LEFT},
-		{"Deployment", LEFT},
-		{"Efficiency\nScore", RIGHT},
-		{"Reliability\nRisk", CENTER},
-		{"Replicas", RIGHT},
-		{"CPU", RIGHT},
-		{"Mem", RIGHT},
-		{"Opportunity", LEFT},
-		{"Flags", LEFT},
+		{"Namespace", alignLeft},
+		{"Deployment", alignLeft},
+		{"Efficiency\nScore", alignRight},
+		{"Reliability\nRisk", alignCenter},
+		{"Replicas", alignRight},
+		{"CPU", alignRight},
+		{"Mem", alignRight},
+		{"Opportunity", alignLeft},
+		{"Flags", alignLeft},
 	}
 }
 
@@ -153,7 +179,7 @@ func (table *AppTable) outputTableHeader() {
 	var alignments []int
 	for _, header := range getHeadersInfo() {
 		headers = append(headers, header.Title)
-		alignments = append(alignments, header.Alignment)
+		alignments = append(alignments, tablewriterAlign(header.Alignment))
 	}
 	table.t.SetHeader(headers)
 	table.t.SetColumnAlignment(alignments)
@@ -179,7 +205,7 @@ func (table *AppTable) outputTableApp(app *appmodel.App) {
 		reason,
 		flagsString(app.Analysis.Flags),
 	}
-	cellColors := []int{color}
+	cellColors := []int{tablewriterColor(color)}
 	rowColors := make([]tablewriter.Colors, len(rowValues))
 	for i := range rowColors {
 		rowColors[i] = cellColors
@@ -197,45 +223,15 @@ func (table *AppTable) outputDetailHeader() {
 }
 
 func (table *AppTable) outputDetailApp(app *appmodel.App) {
-	blank := []string{""}
-	_, appColor := appOpportunityAndColor(app)
-	appColors := []tablewriter.Colors{[]int{0}, []int{appColor}}
-	opportunityColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgGreenColor}}
-	cautionColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgYellowColor}}
-	blockerColors := []tablewriter.Colors{[]int{0}, []int{tablewriter.FgRedColor}}
-	riskColors := []tablewriter.Colors{[]int{0}, []int{riskColor(app.Analysis.ReliabilityRisk)}}
-
-	table.t.Rich([]string{"Namespace", app.Metadata.Namespace}, nil)
-	table.t.Rich([]string{"Deployment", app.Metadata.Workload}, nil)
-	table.t.Rich([]string{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion)}, nil)
-	table.t.Rich([]string{"Main Container", app.Analysis.MainContainer}, nil)
-	table.t.Rich([]string{"Pod QoS Class", app.Settings.QosClass}, nil)
-
-	table.t.Rich([]string{"Efficiency Score", fmt.Sprintf("%4v", appmodel.Score2String(app.Analysis.EfficiencyScore))}, appColors)
-	table.t.Rich([]string{"Reliability Risk", fmt.Sprintf("%v", appmodel.Risk2String(app.Analysis.ReliabilityRisk))}, riskColors)
-	table.t.Rich([]string{"Rating", fmt.Sprintf("%4d%%", app.Analysis.Rating)}, appColors)
-	table.t.Rich([]string{"Confidence", fmt.Sprintf("%4d%%", app.Analysis.Confidence)}, appColors)
-
-	//table.Rich(blank, nil)
-	if len(app.Analysis.Opportunities) > 0 {
-		table.t.Rich([]string{"Opportunities", strings.Join(app.Analysis.Opportunities, "\n")}, opportunityColors)
+	entries := buildDetailEntries(app)
+	for _, e := range entries {
+		var twColor []tablewriter.Colors = nil
+		if e.Color != colorNone {
+			twColor = []tablewriter.Colors{[]int{0}, []int{tablewriterColor(e.Color)}}
+		}
+		table.t.Rich([]string{e.Name, e.Value}, twColor)
 	}
-	if len(app.Analysis.Cautions) > 0 {
-		table.t.Rich([]string{"Cautions", strings.Join(app.Analysis.Cautions, "\n")}, cautionColors)
-	}
-	if len(app.Analysis.Blockers) > 0 {
-		table.t.Rich([]string{"Blockers", strings.Join(app.Analysis.Blockers, "\n")}, blockerColors)
-	}
-
-	//table.Rich(blank, nil)
-	table.t.Rich([]string{"Average Replica Count", fmt.Sprintf("%3.1f", app.Metrics.AverageReplicas)}, nil)
-	table.t.Rich([]string{"Container Count", fmt.Sprintf("%3d", len(app.Containers))}, nil)
-	table.t.Rich([]string{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization)}, nil)
-	table.t.Rich([]string{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization)}, nil)
-	table.t.Rich([]string{"Network Traffic (approx.)", fmt.Sprintf("%3.1f qps", app.Metrics.RequestRate)}, nil)
-	table.t.Rich([]string{"Opsani Flags", flagsString(app.Analysis.Flags)}, nil)
-
-	table.t.Rich(blank, nil)
+	table.t.Rich([]string{""}, nil)
 }
 
 func (table *AppTable) outputAnyTableOut() {
@@ -296,6 +292,22 @@ func selectResourceValue(r *appmodel.AppContainerResourceInfo) float64 {
 	return 0
 }
 
+/*
+servo.yaml: |
+opsani_dev:
+{%- raw %}
+  namespace: {{ NAMESPACE }}
+  deployment: {{ DEPLOYMENT }}
+  container: {{ CONTAINER }}
+  service: {{ SERVICE }}
+{% endraw %}
+  cpu:
+	min: 250m
+	max: '3.0'
+  memory:
+	min: 128.0MiB
+	max: 3.0GiB
+*/
 func (table *AppTable) outputServoYamlApp(app *appmodel.App) {
 	type ResourceRange struct {
 		Min string `yaml:"min,omitempty"`
@@ -351,22 +363,51 @@ func (table *AppTable) outputServoYamlApp(app *appmodel.App) {
 }
 
 func newAppTable(wr io.Writer) *AppTable {
-	return &AppTable{wr, *tablewriter.NewWriter(wr), nil}
+	return &AppTable{wr, *tablewriter.NewWriter(wr), interactiveState{}, nil}
 }
 
-/*
-servo.yaml: |
-opsani_dev:
-{%- raw %}
-  namespace: {{ NAMESPACE }}
-  deployment: {{ DEPLOYMENT }}
-  container: {{ CONTAINER }}
-  service: {{ SERVICE }}
-{% endraw %}
-  cpu:
-	min: 250m
-	max: '3.0'
-  memory:
-	min: 128.0MiB
-	max: 3.0GiB
-*/
+type detailEntry struct {
+	Name  string
+	Value string
+	Color int
+}
+
+func buildDetailEntries(app *appmodel.App) []detailEntry {
+	_, appColor := appOpportunityAndColor(app)
+	opportunityColor := colorGreen
+	cautionColor := colorYellow
+	blockerColor := colorRed
+	riskColor := riskColor(app.Analysis.ReliabilityRisk)
+
+	entries := []detailEntry{
+		{"Namespace", app.Metadata.Namespace, colorNone},
+		{"Deployment", app.Metadata.Workload, colorNone},
+		{"Kind", fmt.Sprintf("%v (%v)", app.Metadata.WorkloadKind, app.Metadata.WorkloadApiVersion), colorNone},
+		{"Main Container", app.Analysis.MainContainer, colorNone},
+		{"Pod QoS Class", app.Settings.QosClass, colorNone},
+		{"Efficiency Score", fmt.Sprintf("%4v", appmodel.Score2String(app.Analysis.EfficiencyScore)), appColor},
+		{"Reliability Risk", fmt.Sprintf("%v", appmodel.Risk2String(app.Analysis.ReliabilityRisk)), riskColor},
+	}
+
+	if len(app.Analysis.Opportunities) > 0 {
+		entries = append(entries, detailEntry{"Opportunities", strings.Join(app.Analysis.Opportunities, "\n"), opportunityColor})
+	}
+	if len(app.Analysis.Cautions) > 0 {
+		entries = append(entries, detailEntry{"Cautions", strings.Join(app.Analysis.Cautions, "\n"), cautionColor})
+	}
+	if len(app.Analysis.Blockers) > 0 {
+		entries = append(entries, detailEntry{"Blockers", strings.Join(app.Analysis.Blockers, "\n"), blockerColor})
+	}
+
+	moreEntries := []detailEntry{
+		{"Average Replica Count", fmt.Sprintf("%3.1f", app.Metrics.AverageReplicas), colorNone},
+		{"Container Count", fmt.Sprintf("%3d", len(app.Containers)), colorNone},
+		{"CPU Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.CpuUtilization), colorNone},
+		{"Memory Utilization", fmt.Sprintf("%3.0f%%", app.Metrics.MemoryUtilization), colorNone},
+		{"Network Traffic (approx.)", fmt.Sprintf("%3.1f qps", app.Metrics.RequestRate), colorNone},
+		{"Opsani Flags", flagsString(app.Analysis.Flags), colorNone},
+	}
+	entries = append(entries, moreEntries...)
+
+	return entries
+}

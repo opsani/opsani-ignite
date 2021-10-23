@@ -32,15 +32,16 @@ var showDebug bool
 var suppressWarnings bool
 
 const (
-	OUTPUT_TABLE  = "table"
-	OUTPUT_DETAIL = "detail"
-	OUTPUT_YAML   = "yaml"
-	OUTPUT_SERVO  = "servo.yaml"
+	OUTPUT_INTERACTIVE = "interactive"
+	OUTPUT_TABLE       = "table"
+	OUTPUT_DETAIL      = "detail"
+	OUTPUT_YAML        = "yaml"
+	OUTPUT_SERVO       = "servo.yaml"
 )
 
 // constant table - format types, keep in sync with OUTPUT_xxx constants above
 func getOutputFormats() []string {
-	return []string{OUTPUT_TABLE, OUTPUT_DETAIL, OUTPUT_YAML, OUTPUT_SERVO}
+	return []string{OUTPUT_INTERACTIVE, OUTPUT_TABLE, OUTPUT_DETAIL, OUTPUT_YAML, OUTPUT_SERVO}
 }
 
 // rootCmd represents the base command when called without any subcommands
