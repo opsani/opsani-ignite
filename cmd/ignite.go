@@ -128,7 +128,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	// }
 
 	// auto-enable show-all-apps in case no apps meet requirements
-	if !showAllApps {
+	if hideBlocked {
 		qualified := 0
 		for _, app := range apps {
 			if isQualifiedApp(app) {
@@ -136,9 +136,9 @@ func runIgnite(cmd *cobra.Command, args []string) {
 			}
 		}
 		if qualified == 0 && deployment == "" { // if a deployment is specified, it will be shown anyway
-			showAllApps = true
-			log.Infof("No highly rated applications found. Showing all applications")
-			fmt.Fprintf(os.Stderr, "No highly rated applications found. Showing all applications\n")
+			hideBlocked = false
+			log.Infof("No applications meet optimization prerequisites. Showing all applications")
+			fmt.Fprintf(os.Stderr, "No applications meet optimization prerequisites. Showing all applications\n")
 		}
 	}
 
@@ -149,7 +149,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	display.WriteHeader(table)
 	for _, app := range apps {
 		// skip unqualified apps (unless either -a flag or explicitly identified app)
-		if !isQualifiedApp(app) && !showAllApps && deployment == "" {
+		if !isQualifiedApp(app) && hideBlocked && deployment == "" {
 			skipped += 1
 			continue
 		}
@@ -157,8 +157,8 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	}
 	display.WriteOut(table)
 	if skipped > 0 {
-		log.Infof("%v applications were not shown due to low rating", skipped)
-		fmt.Fprintf(os.Stderr, "%v applications were not shown due to low rating. Use --show-all to see all apps\n", skipped)
+		log.Infof("%v applications were not shown as they don't meet optimization prerequisites", skipped)
+		fmt.Fprintf(os.Stderr, "%v applications were not shown as they don't meet optimization prerequisites. Remove the --hide-blocked option to see all apps\n", skipped)
 	}
 
 }

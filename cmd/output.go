@@ -112,7 +112,7 @@ func appEfficiencyColor(app *appmodel.App) (color int) {
 	} else if *rate >= 30 {
 		color = colorYellow
 	} else {
-		color = colorOrange
+		color = colorYellow //colorOrange
 	}
 	return
 }

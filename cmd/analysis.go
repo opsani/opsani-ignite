@@ -530,6 +530,8 @@ func analyzeApp(app *appmodel.App) {
 		o.Conclusion = appmodel.CONCLUSION_EXCESSIVE_COST
 	} else if o.ReliabilityRisk.SafeRiskLevel() >= appmodel.RISK_NONE && o.ReliabilityRisk.SafeRiskLevel() <= appmodel.RISK_LOW {
 		o.Conclusion = appmodel.CONCLUSION_OK
+	} else if o.ReliabilityRisk.SafeRiskLevel() == appmodel.RISK_MEDIUM {
+		o.Conclusion = appmodel.CONCLUSION_RELIABILITY_RISK
 	}
 
 	// add recommendations

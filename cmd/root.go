@@ -27,7 +27,7 @@ var timeStart time.Time
 var timeEnd time.Time
 var timeStep time.Duration
 var outputFormat string
-var showAllApps bool
+var hideBlocked bool
 var showDebug bool
 var suppressWarnings bool
 
@@ -48,8 +48,9 @@ func getOutputFormats() []string {
 var rootCmd = &cobra.Command{
 	Use:   "opsani-ignite [<namespace> [<deployment>]]",
 	Short: "Opsani Ignite for Kubernetes",
-	Long: `Opsani Ignite looks through the performance history of 
-application workloads running on Kubernetes and identifies optimization opportunities.
+	Long: `Opsani Ignite looks through the performance history of application workloads 
+running on Kubernetes and identifies reliability risks and optimization 
+opportunities.
 
 For each application it finds, it evaluates what can be optimized and displays
 a list of optimization candidates in preferred order of onboarding.`,
@@ -81,7 +82,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&timeStepString, "step", "1d", "Time resolution, in relative form")
 
 	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "", fmt.Sprintf("Output format (%v)", strings.Join(getOutputFormats(), "|")))
-	rootCmd.PersistentFlags().BoolVarP(&showAllApps, "show-all", "a", false, "Show all apps, including unoptimizable")
+	rootCmd.PersistentFlags().BoolVarP(&hideBlocked, "hide-blocked", "b", false, "Hide applications that don't meet optimization prerequisites")
 	rootCmd.PersistentFlags().BoolVar(&showDebug, "debug", false, "Display tracing/debug information to stderr")
 	rootCmd.PersistentFlags().BoolVarP(&suppressWarnings, "quiet", "q", false, "Suppress warning and info level messages")
 }
@@ -148,11 +149,11 @@ func validateFlags(cmd *cobra.Command, args []string) error {
 
 	// check output format
 	if outputFormat == "" {
-		// smart select: detail view if a single app is specified; table view for multiple apps
+		// smart select: interactive view by default; if a single app is specified, then just show the detail view for it
 		if len(args) >= 2 { // namespace + deployment specifies a single app
 			outputFormat = OUTPUT_DETAIL
 		} else {
-			outputFormat = OUTPUT_TABLE
+			outputFormat = OUTPUT_INTERACTIVE
 		}
 	} else {
 		outputFormatValid := false

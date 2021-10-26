@@ -144,8 +144,14 @@ func (table *AppTable) outputInteractiveRun() {
 		}
 	})
 
+	// create frame
+	f := tview.NewFrame(t)
+	f.AddText("Sign up for Opsani at https://opsani.com/create-your-account2/#ignite", false /*header*/, tview.AlignCenter, 0 /*color*/)
+	f.SetBorders(0 /*top*/, 0 /*bottom*/, 0 /*header*/, 1 /*footer*/, 0 /*left*/, 0 /*right*/)
+
+	// create pages and run
 	table.i.pages = tview.NewPages()
-	table.i.pages.AddPage("applist", t, true, true)
+	table.i.pages.AddPage("applist", f, true, true)
 	if err := app.SetRoot(table.i.pages, true).SetFocus(table.i.pages).Run(); err != nil {
 		panic(err)
 	}
