@@ -394,6 +394,11 @@ func analyzeApp(app *appmodel.App) {
 		o.Flags[appmodel.F_MAIN_CONTAINER] = false
 	}
 
+	// mark multicontainer pods
+	if count := len(app.Containers); count > 0 {
+		o.Flags[appmodel.F_MULTI_CONTAINER] = count > 1 // flag not set if no container info
+	}
+
 	// having a writeable PVC disqualifies the app immediately (stateful)
 	if app.Settings.WriteableVolume {
 		o.Blockers = append(o.Blockers, "Stateful: pods have writeable volumes")
@@ -418,7 +423,7 @@ func analyzeApp(app *appmodel.App) {
 	} else {
 		o.Flags[appmodel.F_RESOURCE_SPEC] = false
 		o.Blockers = append(o.Blockers, msg)
-		o.Opportunities = append(o.Opportunities, "Define resource levels to improve reliability")
+		o.Recommendations = append(o.Recommendations, "Define resource levels to improve reliability")
 	}
 
 	// analyze resource utilization
@@ -443,19 +448,19 @@ func analyzeApp(app *appmodel.App) {
 		}
 	}
 
-	// compute efficiency score
+	// compute efficiency rate
 	if app.Metrics.MemoryUtilization == 0 {
-		o.EfficiencyScore = nil // something is wrong - this app likely not functioning or we don't have metrics
+		o.EfficiencyRate = nil // something is wrong - this app likely not functioning or we don't have metrics
 	} else if app.Metrics.CpuUtilization == 0 {
 		// idle apps are inefficient by definition
-		score := 0
-		o.EfficiencyScore = &score
+		rate := 0
+		o.EfficiencyRate = &rate
 	} else {
 		cpuSat := opsmath.Min(app.Metrics.CpuUtilization, 100)    // cap utilization for efficiency calc
 		memSat := opsmath.Min(app.Metrics.MemoryUtilization, 100) // " "
-		// score can be assigned only if the app is not bursting
-		score := int(math.Round(cpuSat*CPU_WEIGHT + memSat*MEM_WEIGHT))
-		o.EfficiencyScore = &score
+		// rate can be assigned only if the app is not bursting
+		rate := int(math.Round(cpuSat*CPU_WEIGHT + memSat*MEM_WEIGHT))
+		o.EfficiencyRate = &rate
 	}
 
 	// analyze request rate
@@ -515,6 +520,30 @@ func analyzeApp(app *appmodel.App) {
 		o.Confidence = 0
 	} else if o.Confidence > 100 {
 		o.Confidence = 100
+	}
+
+	// derive conclusion
+	o.Conclusion = appmodel.CONCLUSION_INSUFFICIENT_DATA
+	if o.ReliabilityRisk.SafeRiskLevel() >= appmodel.RISK_HIGH {
+		o.Conclusion = appmodel.CONCLUSION_RELIABILITY_RISK
+	} else if o.EfficiencyRate != nil && *o.EfficiencyRate < 60 {
+		o.Conclusion = appmodel.CONCLUSION_EXCESSIVE_COST
+	} else if o.ReliabilityRisk.SafeRiskLevel() >= appmodel.RISK_NONE && o.ReliabilityRisk.SafeRiskLevel() <= appmodel.RISK_LOW {
+		o.Conclusion = appmodel.CONCLUSION_OK
+	}
+
+	// add recommendations
+	if !o.Flags[appmodel.F_WRITEABLE_VOLUME] { // if optimization not blocked (except by missing resource defs)
+		goals := []string{}
+		if o.EfficiencyRate != nil && *o.EfficiencyRate < 80 {
+			goals = append(goals, "efficiency")
+		}
+		if o.ReliabilityRisk == nil || *o.ReliabilityRisk > appmodel.RISK_LOW {
+			goals = append(goals, "reliability")
+		}
+		if len(goals) > 0 {
+			o.Recommendations = append(o.Recommendations, fmt.Sprintf("Optimize with Opsani to improve %v", strings.Join(goals, " and ")))
+		}
 	}
 
 	// update

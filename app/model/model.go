@@ -66,6 +66,7 @@ type AppFlag int
 
 const (
 	F_MAIN_CONTAINER = iota
+	F_MULTI_CONTAINER
 	F_WRITEABLE_VOLUME
 	F_RESOURCE_SPEC
 	F_RESOURCE_LIMITS
@@ -78,7 +79,7 @@ const (
 )
 
 func (f AppFlag) String() string {
-	return []string{"C", "V", "R", "L", "G", "U", "B", "T", "S", "M"}[f]
+	return []string{"C", "I", "W", "R", "L", "G", "U", "B", "T", "S", "M"}[f]
 }
 
 func (f AppFlag) MarshalYAML() (interface{}, error) {
@@ -96,6 +97,13 @@ const (
 	RISK_CRITICAL
 )
 
+func (r *RiskLevel) SafeRiskLevel() RiskLevel {
+	if r == nil {
+		return RISK_UNKNOWN
+	}
+	return *r
+}
+
 func (r RiskLevel) String() string {
 	return []string{"-", "None", "Low", "Medium", "High", "Critical"}[r]
 }
@@ -104,16 +112,35 @@ func (r RiskLevel) MarshalYAML() (interface{}, error) {
 	return r.String(), nil
 }
 
+type AnalysisConclusion int
+
+const (
+	CONCLUSION_INSUFFICIENT_DATA = iota
+	CONCLUSION_RELIABILITY_RISK
+	CONCLUSION_EXCESSIVE_COST
+	CONCLUSION_OK
+)
+
+func (c AnalysisConclusion) String() string {
+	return []string{"(insufficient data)", "Reliability Risk", "Excessive Cost", "Look good!"}[c]
+}
+
+func (c AnalysisConclusion) MarshalYAML() (interface{}, error) {
+	return c.String(), nil
+}
+
 type AppAnalysis struct {
-	Rating          int              `yaml:"rating"`         // how suitable for optimization
-	Confidence      int              `yaml:"confidence"`     // how confident is the rating
-	MainContainer   string           `yaml:"main_container"` // container to optimize or empty if not identified
-	EfficiencyScore *int             `yaml:"efficiency_score"`
-	ReliabilityRisk *RiskLevel       `yaml:"reliability_risk"`
-	Flags           map[AppFlag]bool `yaml:"flags"`         // flags
-	Opportunities   []string         `yaml:"opportunities"` // list of optimization opportunities
-	Cautions        []string         `yaml:"cautions"`      // list of concerns/cautions
-	Blockers        []string         `yaml:"blockers"`      // list of blockers prevention optimization
+	Rating          int                `yaml:"rating"`           // how suitable for optimization
+	Confidence      int                `yaml:"confidence"`       // how confident is the rating
+	MainContainer   string             `yaml:"main_container"`   // container to optimize or empty if not identified
+	EfficiencyRate  *int               `yaml:"efficiency_rate"`  // 0-100%
+	ReliabilityRisk *RiskLevel         `yaml:"reliability_risk"` // high/medium/low
+	Conclusion      AnalysisConclusion `yaml:"conclusion"`       // analysis conclusion
+	Flags           map[AppFlag]bool   `yaml:"flags"`            // flags
+	Opportunities   []string           `yaml:"opportunities"`    // list of optimization opportunities
+	Cautions        []string           `yaml:"cautions"`         // list of concerns/cautions
+	Blockers        []string           `yaml:"blockers"`         // list of blockers prevention optimization
+	Recommendations []string           `yaml:"recommendations"`  // list of recommendations for improvement
 }
 
 type App struct {
@@ -137,7 +164,7 @@ func (app *App) ContainerIndexByName(name string) (index int, ok bool) {
 	return
 }
 
-func Score2String(s *int) string {
+func Rate2String(s *int) string {
 	if s == nil {
 		return "n/a"
 	}

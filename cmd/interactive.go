@@ -48,6 +48,8 @@ func tviewColor(color int) tcell.Color {
 		colorGreen:  tcell.ColorGreen,
 		colorYellow: tcell.ColorYellow,
 		colorRed:    tcell.ColorRed,
+		colorCyan:   tcell.ColorAqua,
+		colorOrange: tcell.ColorOrange,
 	}[color]
 }
 
@@ -81,7 +83,7 @@ func (table *AppTable) outputInteractiveInit() {
 	}
 
 	table.i = interactiveState{
-		table:     tview.NewTable().SetSelectable(true, false).SetFixed(titleRowCount, 0),
+		table:     tview.NewTable().SetSelectable(true, false).SetFixed(titleRowCount, 0).SetEvaluateAllRows(true),
 		aligns:    aligns,
 		titleRows: titleRowCount,
 	}
@@ -95,18 +97,19 @@ func (table *AppTable) outputInteractiveInit() {
 func (table *AppTable) outputInteractiveAddApp(app *appmodel.App) {
 	t := table.i.table
 
-	reason, _ := appOpportunityAndColor(app)
+	efficiencyColor := tviewColor(appEfficiencyColor(app))
+	riskColor := tviewColor(riskColor(app.Analysis.ReliabilityRisk))
+	conclusionColor := tviewColor(conclusionColor(app.Analysis.Conclusion))
 
 	cells := []*tview.TableCell{
 		tview.NewTableCell(app.Metadata.Namespace),
 		tview.NewTableCell(app.Metadata.Workload),
-		tview.NewTableCell(fmt.Sprintf("%3v", appmodel.Score2String(app.Analysis.EfficiencyScore))),
-		tview.NewTableCell(fmt.Sprintf("%v", appmodel.Risk2String(app.Analysis.ReliabilityRisk))),
-		tview.NewTableCell(fmt.Sprintf("%.0fx%d", app.Metrics.AverageReplicas, len(app.Containers))),
+		tview.NewTableCell(fmt.Sprintf("%3v%%", appmodel.Rate2String(app.Analysis.EfficiencyRate))).SetTextColor(efficiencyColor),
+		tview.NewTableCell(fmt.Sprintf("%v", appmodel.Risk2String(app.Analysis.ReliabilityRisk))).SetTextColor(riskColor),
+		tview.NewTableCell(fmt.Sprintf("%.0f", app.Metrics.AverageReplicas)),
 		tview.NewTableCell(fmt.Sprintf("%.0f%%", app.Metrics.CpuUtilization)),
 		tview.NewTableCell(fmt.Sprintf("%.0f%%", app.Metrics.MemoryUtilization)),
-		tview.NewTableCell(reason),
-		tview.NewTableCell(flagsString(app.Analysis.Flags)),
+		tview.NewTableCell(app.Analysis.Conclusion.String()).SetTextColor(conclusionColor),
 	}
 	cells[0].SetReference(app) // backlink to app in column 0
 	table.updateRow(t.GetRowCount(), cells)
@@ -151,11 +154,13 @@ func (table *AppTable) outputInteractiveRun() {
 func (table *AppTable) popupAppDetail(app *appmodel.App) {
 	entries := buildDetailEntries(app)
 
-	t := tview.NewTable()
+	t := tview.NewTable().SetEvaluateAllRows(true)
 	row := 0
 	for _, e := range entries {
 		t.SetCell(row, 0, tview.NewTableCell(e.Name)) // label
-		t.SetCellSimple(row, 1, ":")
+		if e.Name != "" {
+			t.SetCellSimple(row, 1, ":")
+		}
 		values := strings.Split(e.Value, "\n")
 		if len(values) == 0 {
 			values = []string{""}
@@ -173,5 +178,30 @@ func (table *AppTable) popupAppDetail(app *appmodel.App) {
 		}
 	})
 
-	table.i.pages.AddAndSwitchToPage("details", t, true)
+	// --- Emulate modal pop up with the details table inside
+
+	// prepare frame
+	f := tview.NewFrame(t)
+	f.AddText("Press ESC to return to list", false /*header*/, tview.AlignCenter, 0)
+	f.SetBorders(1 /*top*/, 1 /*bottom*/, 0 /*header*/, 0 /*footer*/, 1 /*left*/, 1 /*right*/)
+	_, top := table.i.pages.GetFrontPage()
+	x, y, w, h := top.GetRect()
+	if w >= 40 {
+		x += 3
+		w -= 6
+		if h >= 20 {
+			y += 1
+			h -= 3
+		}
+		rows := t.GetRowCount() + 5 // borders, spacing, footer
+		if h > rows {
+			h = rows
+		}
+	}
+	f.SetRect(x, y, w, h) // always set size, since "resize" is false in AddPage()
+
+	//table.i.pages.AddAndSwitchToPage("details", t, true)
+	t.SetBorder(true)
+	t.SetTitle(fmt.Sprintf(" Details (%v) ", app.Metadata.Workload))
+	table.i.pages.AddPage("details", f, false /*resize*/, true /*visivble*/)
 }
