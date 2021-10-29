@@ -438,7 +438,7 @@ func buildDetailEntries(app *appmodel.App) []detailEntry {
 		entries = append(entries, detailEntry{"Blockers", strings.Join(app.Analysis.Blockers, "\n"), blockerColor})
 	}
 	if len(app.Analysis.Recommendations) > 0 {
-		entries = append(entries, detailEntry{"Recommentations", strings.Join(app.Analysis.Recommendations, "\n"), recommendationColor})
+		entries = append(entries, detailEntry{"Recommendations", strings.Join(app.Analysis.Recommendations, "\n"), recommendationColor})
 	}
 
 	return entries

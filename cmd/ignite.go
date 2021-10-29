@@ -161,4 +161,6 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(os.Stderr, "%v applications were not shown as they don't meet optimization prerequisites. Remove the --hide-blocked option to see all apps\n", skipped)
 	}
 
+	fmt.Fprint(os.Stderr, "To optimize your application, sign up for a free trial account at https://opsani.com/create-your-account2/#ignite\n")
+
 }
