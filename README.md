@@ -7,7 +7,7 @@
 [![Github All Releases](https://img.shields.io/github/downloads/opsani/opsani-ignite/total.svg?style=for-the-badge)](https://github.com/opsani/opsani-ignite/releases/latest)
 
 Opsani Ignite analyzes applications running on a Kubernetes cluster in order to 
-identify _performance and reliability risks_, as well as _inefficient configurations_. It then identifies specific _corrective actions_ that align the application's configuration with deployment best practices for production environments and may also reduce the application's resource footprint.
+identify _performance and reliability risks_, as well as _inefficient configurations_. It then identifies specific _corrective actions_ that align the application's configuration with deployment best practices for production environments and may also reduce the application's _resource footprint_.
 
 CAUTION: Opsani Ignite is a new tool, still in alpha. We appreciate [feedback and suggestions](#feedback-and-suggestions).
 
@@ -25,7 +25,7 @@ Once port forwarding is active, run the `opsani-ignite` executable, providing th
 
 `opsani-ignite -p http://localhost:9090`
 
-Opsani Ignite has three phases: discovery, analysis and recommendations.
+Opsani Ignite works in three phases: discovery, analysis and recommendations.
 
 ## Phase 1: Discovery
 
@@ -41,17 +41,13 @@ Ignite analyzes each application, looking at pods and containers that make up th
 
 ![analysis](docs/analysis.png)
 
-In addition, Ignite determines whether the application is overprovisioned resulting in a higher than necessary cloud spend. In such cases, it also estimates the likely savings that can be obtained through optimization.
+In addition, Ignite determines whether the application is overprovisioned and has a higher-than-necessary cloud spend. In these cases, it also estimates the likely savings that can be obtained through optimization.
 
 ## Phase 3: Recommendations
 
 When an application is selected (pressing Enter in the table of apps), Ignite produces a set of actionable recommendations for improving the efficiency, performance, and reliability of the application. The recommendations fall into several categories, including production best practices (for example, setting resource requests and limits), as well as optimal and resilient operation optimization recommendations. Applying these recommendations results in improved performance and efficiency, as well as increased resilience of their applications under load.
 
 ![recommendations](docs/recommendations.png)
-
-# Interactive... Stdout... or YAML output
-
-By default, Ignite is text-based interactive tool (using the fantastic [tview](https://github.com/rivo/tview) package, familiar to those who use the equally magnificent [k9s](https://github.com/derailed/k9s) tool). Ignite's command line options can change the output to simple stdout text view and even full-detail YAML output that can be used to integrate Ignite into your dashboards and higher level tools.
 
 # Optimization Recommendations
 
@@ -61,17 +57,41 @@ Best practices require correctly setting resource requirements in a way that mee
 
 They can also be automatically identified using automatic optimization services, such as the Opsani optimization-as-a-service tool. Those who are interested in how continuous optimization can remediate these issues can go to the [Opsani website](https://opsani.com), set up a [free trial account](https://opsani.com/create-your-account2/#ignite-readme) and attach the optimizer to their application. Connecting an application to the optimizer typically takes 10-15 minutes and, in a few hours, produces concrete, tested resource specifications that can be applied using a simple `kubectl` command.
 
+# Interactive... Stdout... or YAML output
+
+By default, Ignite is text-based interactive tool (using the fantastic [tview](https://github.com/rivo/tview) package, familiar to those who use the equally magnificent [k9s](https://github.com/derailed/k9s) tool). Ignite's command line options can change the output to simple stdout text view and even full-detail YAML output that can be used to integrate Ignite into your dashboards and higher level tools.
+
+# Command Line Options
+
+Here are Ignite's command line options:
+
+```
+Usage:
+  opsani-ignite [<namespace> [<deployment>]] [flags]
+
+Flags:
+      --config string           config file (default is $HOME/.opsani-ignite.yaml)
+  -p, --prometheus-url string   URI to Prometheus API (typically port-forwarded to localhost using kubectl)
+      --start string            Analysis start time, in RFC3339 or relative form (default "-7d")
+      --end string              Analysis end time, in RFC3339 or relative form (default "-0d")
+      --step string             Time resolution, in relative form (default "1d")
+  -o, --output string           Output format (interactive|table|detail|yaml|servo.yaml)
+  -b, --hide-blocked            Hide applications that don't meet optimization prerequisites
+      --debug                   Display tracing/debug information to stderr
+  -q, --quiet                   Suppress warning and info level messages
+  -h, --help                    help for opsani-ignite
+```
 
 # Feedback and Suggestions
 
 The Ignite tool is the result of analyzing thousands of applications as part of our work at Opsani. We released it as an open source tool in order to share our experience and learning with the Kubernetes community and help improve application reliability and efficiency. The source code is available to review and to contribute.
 
-We will appreciate your feedback. Please send us a few lines about your experience--or, even better--a screenshot with the results (be they good or not so good) at ![support](docs/support.png).
+We appreciate your feedback. Please send us a few lines about your experience--or, even better--a screenshot &#x1F4F7; with the results (be they good or not so good) at <img src="docs/support.png" height="14">. Issues and PRs are also a great way to help improve Ignite for everyone.
 
 # Troubleshooting 
 
-Opsani Ignite records diagnostic information in `opsani-ignite.log`. You can increase the logging level by adding the `--debug` option to the command line.
+Opsani Ignite records diagnostic information in `opsani-ignite.log`. You can increase the logging level by adding the `--debug` option to the command line; running the YAML output option (`-o yaml`) is also a great way to see the full details.
 
 # Where To Get Help
 
-You can reach out to Opsani Technical support at ![support](docs/support.png) or, for faster response, use the chat bot on the [Opsani web site](https://www.opsani.com).
+You can reach out to Opsani Technical support at <img src="docs/support.png" height="14"> or, for faster response, use the chat bot &#x1F4AC; on the [Opsani web site](https://www.opsani.com).
