@@ -536,15 +536,11 @@ func analyzeApp(app *appmodel.App) {
 
 	// add recommendations
 	if !o.Flags[appmodel.F_WRITEABLE_VOLUME] { // if optimization not blocked (except by missing resource defs)
-		goals := []string{}
 		if o.EfficiencyRate != nil && *o.EfficiencyRate < 80 {
-			goals = append(goals, "efficiency")
+			o.Recommendations = append(o.Recommendations, "Optimize resource settings improve efficiency/reduce costs")
 		}
 		if o.ReliabilityRisk == nil || *o.ReliabilityRisk > appmodel.RISK_LOW {
-			goals = append(goals, "reliability")
-		}
-		if len(goals) > 0 {
-			o.Recommendations = append(o.Recommendations, fmt.Sprintf("Optimize with Opsani to improve %v", strings.Join(goals, " and ")))
+			o.Recommendations = append(o.Recommendations, "Optimize resource settings improve reliability")
 		}
 	}
 

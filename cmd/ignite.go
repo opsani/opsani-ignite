@@ -20,6 +20,8 @@ import (
 	prom "opsani-ignite/sources/prometheus"
 )
 
+const LOG_FILE = "opsani-ignite.log"
+
 func opportunitySorter(apps []*appmodel.App, i, j int) bool {
 	ia, ja := apps[i], apps[j]
 	// sort by rating first
@@ -51,14 +53,7 @@ func isQualifiedApp(app *appmodel.App) bool {
 	return app.Analysis.Rating >= 0
 }
 
-func runIgnite(cmd *cobra.Command, args []string) {
-	// set up logging
-	logFile, err := os.OpenFile("opsani-ignite.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening log file: %v", err)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
+func setupLogLevel() {
 	if showDebug {
 		log.SetLevel(log.TraceLevel)
 	} else if suppressWarnings {
@@ -66,17 +61,13 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	} else {
 		log.SetLevel(log.InfoLevel)
 	}
+}
 
-	namespace := ""
-	deployment := ""
-	if len(args) >= 1 {
-		namespace = args[0]
-	}
-	if len(args) >= 2 {
-		deployment = args[1]
-	}
+func displayConfig(namespace, deployment string) {
+	msgs := make([]string, 0)
 
-	apiMsg := fmt.Sprintf("Using Prometheus API at %q", promUri)
+	msgs = append(msgs, fmt.Sprintf("Using Prometheus API at %q", promUri))
+
 	anzMsg := "Analyzing "
 	if namespace != "" {
 		if deployment != "" {
@@ -87,11 +78,37 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	} else {
 		anzMsg += "all deployments in all non-system namespaces"
 	}
-	anzMsg += fmt.Sprintf(" from %v to %v in %v increments.\n", timeStart.Format(time.RFC3339), timeEnd.Format(time.RFC3339), timeStep)
-	log.Print(apiMsg)
-	fmt.Fprintln(os.Stderr, apiMsg)
-	log.Print(anzMsg)
-	fmt.Fprintln(os.Stderr, anzMsg)
+	msgs = append(msgs, anzMsg)
+
+	msgs = append(msgs, fmt.Sprintf("From %v to %v in increments of %v.",
+		timeStart.Format(time.RFC3339), timeEnd.Format(time.RFC3339), timeStep))
+
+	for _, msg := range msgs {
+		log.Print(msg)
+		fmt.Fprintln(os.Stderr, msg)
+	}
+	fmt.Fprintln(os.Stderr, "")
+}
+
+func runIgnite(cmd *cobra.Command, args []string) {
+	logFile, err := os.OpenFile(LOG_FILE, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening log file: %v", err)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+	setupLogLevel()
+
+	// determine namespace & deployment selection
+	namespace := ""
+	deployment := ""
+	if len(args) >= 1 {
+		namespace = args[0]
+	}
+	if len(args) >= 2 {
+		deployment = args[1]
+	}
+	displayConfig(namespace, deployment) // and API url and time range/step
 
 	// Create root context
 	ctx := context.Background()
