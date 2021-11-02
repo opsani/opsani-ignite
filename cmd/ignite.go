@@ -90,6 +90,43 @@ func displayConfig(namespace, deployment string) {
 	fmt.Fprintln(os.Stderr, "")
 }
 
+func displayResults(apps []*appmodel.App, targetedApps bool) {
+	// auto-enable show-all-apps in case no apps meet requirements
+	if targetedApps {
+		hideBlocked = false // ignore hideBlocked when namespace+deployment are explicitly specified
+	} else if hideBlocked {
+		qualified := 0
+		for _, app := range apps {
+			if isQualifiedApp(app) {
+				qualified += 1
+			}
+		}
+		if qualified == 0 {
+			hideBlocked = false
+			log.Infof("No applications meet optimization prerequisites. Showing all applications")
+			fmt.Fprintf(os.Stderr, "No applications meet optimization prerequisites. Showing all applications\n")
+		}
+	}
+
+	// build table & display (stream, yaml or interactive)
+	table := newAppTable(os.Stdout)
+	skipped := 0
+	display := getDisplayMethods()[outputFormat]
+	display.WriteHeader(table)
+	for _, app := range apps {
+		if hideBlocked && !isQualifiedApp(app) {
+			skipped += 1
+			continue
+		}
+		display.WriteApp(table, app)
+	}
+	display.WriteOut(table)
+	if skipped > 0 {
+		log.Infof("%v applications were not shown as they don't meet optimization prerequisites", skipped)
+		fmt.Fprintf(os.Stderr, "%v applications were not shown as they don't meet optimization prerequisites. Remove the --hide-blocked option to see all apps\n", skipped)
+	}
+}
+
 func runIgnite(cmd *cobra.Command, args []string) {
 	logFile, err := os.OpenFile(LOG_FILE, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -139,45 +176,8 @@ func runIgnite(cmd *cobra.Command, args []string) {
 		return opportunitySorter(apps, i, j)
 	})
 
-	// --- Display applications in a table
-	// for _, app := range apps {
-	// 	fmt.Printf("%#v\n\n", app)
-	// }
-
-	// auto-enable show-all-apps in case no apps meet requirements
-	if hideBlocked {
-		qualified := 0
-		for _, app := range apps {
-			if isQualifiedApp(app) {
-				qualified += 1
-			}
-		}
-		if qualified == 0 && deployment == "" { // if a deployment is specified, it will be shown anyway
-			hideBlocked = false
-			log.Infof("No applications meet optimization prerequisites. Showing all applications")
-			fmt.Fprintf(os.Stderr, "No applications meet optimization prerequisites. Showing all applications\n")
-		}
-	}
-
 	// display results
-	table := newAppTable(os.Stdout)
-	skipped := 0
-	display := getDisplayMethods()[outputFormat]
-	display.WriteHeader(table)
-	for _, app := range apps {
-		// skip unqualified apps (unless either -a flag or explicitly identified app)
-		if !isQualifiedApp(app) && hideBlocked && deployment == "" {
-			skipped += 1
-			continue
-		}
-		display.WriteApp(table, app)
-	}
-	display.WriteOut(table)
-	if skipped > 0 {
-		log.Infof("%v applications were not shown as they don't meet optimization prerequisites", skipped)
-		fmt.Fprintf(os.Stderr, "%v applications were not shown as they don't meet optimization prerequisites. Remove the --hide-blocked option to see all apps\n", skipped)
-	}
+	displayResults(apps, deployment != "")
 
 	fmt.Fprint(os.Stderr, "To optimize your application, sign up for a free trial account at https://opsani.com/create-your-account2/#ignite\n")
-
 }
