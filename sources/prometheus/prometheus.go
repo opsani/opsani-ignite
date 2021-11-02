@@ -17,13 +17,13 @@ import (
 	"text/template"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	//"github.com/prometheus/common/config"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 
 	appmodel "opsani-ignite/app/model"
+	"opsani-ignite/log"
 	opsmath "opsani-ignite/math"
 )
 

@@ -12,8 +12,8 @@ import (
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-	log "github.com/sirupsen/logrus"
 
+	"opsani-ignite/log"
 	opsmath "opsani-ignite/math"
 )
 

@@ -12,11 +12,11 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	appmodel "opsani-ignite/app/model"
 
+	"opsani-ignite/log"
 	prom "opsani-ignite/sources/prometheus"
 )
 
@@ -51,16 +51,6 @@ func opportunitySorter(apps []*appmodel.App, i, j int) bool {
 
 func isQualifiedApp(app *appmodel.App) bool {
 	return app.Analysis.Rating >= 0
-}
-
-func setupLogLevel() {
-	if showDebug {
-		log.SetLevel(log.TraceLevel)
-	} else if suppressWarnings {
-		log.SetLevel(log.ErrorLevel)
-	} else {
-		log.SetLevel(log.InfoLevel)
-	}
 }
 
 func displayConfig(namespace, deployment string) {
@@ -128,13 +118,22 @@ func displayResults(apps []*appmodel.App, targetedApps bool) {
 }
 
 func runIgnite(cmd *cobra.Command, args []string) {
+
+	// demo the progress "bar" with visual inspection
+	// err := log.DemoProgress()
+	// if err != nil {
+	// 	fmt.Print(err)
+	// 	return
+	// }
+	// return
+
 	logFile, err := os.OpenFile(LOG_FILE, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening log file: %v", err)
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	setupLogLevel()
+	log.SetupLogLevel(showDebug, suppressWarnings)
 
 	// determine namespace & deployment selection
 	namespace := ""

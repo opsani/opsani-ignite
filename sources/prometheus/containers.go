@@ -9,8 +9,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	appmodel "opsani-ignite/app/model"
-	opsmath "opsani-ignite/math"
 	"reflect"
 	"strings"
 	"text/template"
@@ -18,7 +16,10 @@ import (
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-	log "github.com/sirupsen/logrus"
+
+	appmodel "opsani-ignite/app/model"
+	"opsani-ignite/log"
+	opsmath "opsani-ignite/math"
 )
 
 // get request or limit values for all resources of all containers of the specificed application
@@ -137,7 +138,7 @@ func getContainersUseValueMap(ctx context.Context, promApi v1.API, app *appmodel
 	valueMap := make(map[string]float64, len(app.Containers))
 	for _, c := range series { // c is *model.SampleStream
 		if len(c.Metric) > 1 {
-			log.Warningf("metrics returned for query %q contain labels %v, expected %v, ignoring extras (app %v)", query, c.Metric, []string{"container"}, app.Metadata)
+			log.Warnf("metrics returned for query %q contain labels %v, expected %v, ignoring extras (app %v)", query, c.Metric, []string{"container"}, app.Metadata)
 		}
 		if len(c.Metric) == 0 {
 			//log.Tracef("(expected) skipping metrics for without labels for app %v, query %q", app.Metadata, query)
