@@ -15,8 +15,10 @@ import (
 
 // ProgressInfo holds the values used to show progress
 type ProgressInfo struct {
-	namespaces int
-	workloads  int
+	namespacesTotal int
+	namespacesDone  int
+	workloadsTotal  int
+	workloadsDone   int
 }
 
 // UpdateFunc is the signature of the progress update callback function
@@ -45,7 +47,8 @@ func (s *progressState) renderProgress(startTime time.Time, final bool) {
 	// display info as progress
 	now := time.Now()
 	elapsed := math.Round(now.Sub(startTime).Seconds()*10) / 10
-	fmt.Fprintf(os.Stderr, "\rCollecting data (%.1fs): %v namespace(s), %v application(s)... ", elapsed, info.namespaces, info.workloads)
+	fmt.Fprintf(os.Stderr, "\rCollecting data (%.1fs): %v of %v namespace(s) and %v of %v application(s) completed... ",
+		elapsed, info.namespacesDone, info.namespacesTotal, info.workloadsDone, info.workloadsTotal)
 	if final {
 		fmt.Fprintf(os.Stderr, "done.\n\n")
 	}

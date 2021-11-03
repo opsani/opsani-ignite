@@ -13,11 +13,22 @@ func job(update UpdateFunc) error {
 	apps := 0
 	for n := 0; n < 5; n++ {
 		for a := 0; a < 7; a++ {
-			update(ProgressInfo{namespaces: n, workloads: apps})
+			update(ProgressInfo{
+				namespacesTotal: 5,
+				namespacesDone:  n,
+				workloadsTotal:  (n + 1) * 7,
+				workloadsDone:   apps,
+			})
 			apps++
 			time.Sleep(325 * time.Millisecond)
 		}
 	}
+	update(ProgressInfo{
+		namespacesTotal: 5,
+		namespacesDone:  5,
+		workloadsTotal:  5 * 7,
+		workloadsDone:   apps,
+	})
 	return nil
 }
 
