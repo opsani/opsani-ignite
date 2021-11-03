@@ -13,12 +13,16 @@ import (
 	"time"
 )
 
+// ProgressInfo holds the values used to show progress
 type ProgressInfo struct {
 	namespaces int
 	workloads  int
 }
 
+// UpdateFunc is the signature of the progress update callback function
 type UpdateFunc func(info ProgressInfo)
+
+// RunnerFunc is the signature for the function to run with GoWithProgress
 type RunnerFunc func(infoCallback UpdateFunc) error
 
 type progressState struct {
@@ -47,6 +51,7 @@ func (s *progressState) renderProgress(startTime time.Time, final bool) {
 	}
 }
 
+// GoWithProgress executes the given runner function as a goroutine while showing progress
 func GoWithProgress(runner RunnerFunc) error {
 	done := make(chan error)
 	state := progressState{}
