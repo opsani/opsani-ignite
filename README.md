@@ -15,6 +15,8 @@ CAUTION: Opsani Ignite is a new tool, still in alpha. We appreciate [feedback an
 
 To install `opsani-ignite`, download the binary for your OS (macOS, Linux or Windows) from the [latest release](https://github.com/opsani/opsani-ignite/releases/latest) and place it somewhere along your shell's path. Check back often as we release updated analysis capabilities frequently; if your version is more than a week old, please see if a newer version is available before using it.
 
+_Note: on macOS, the first time you run the binary, macOS complain about it not being signed. After you get the error, go to 'System Preferences -> Security & Privacy -> General' and click 'allow opsani-ignite' to run. Alternatively, you can clone the repository and build your own binary. We're working to get signing for our macOS builds._
+
 # Run Ignite
 
 To run Opsani Ignite, you will first want to set up port forwarding to the Prometheus API on your cluster. A typical command looks like this (assuming your Prometheus is called `prometheus-server` and runs in the `prometheus` namespace):
