@@ -17,13 +17,13 @@ import (
 	"text/template"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	//"github.com/prometheus/common/config"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 
 	appmodel "opsani-ignite/app/model"
+	"opsani-ignite/log"
 	opsmath "opsani-ignite/math"
 )
 
@@ -260,7 +260,7 @@ func collectDeploymentDetails(ctx context.Context, promApi v1.API, app *appmodel
 	return allWarnings, nil
 }
 
-func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValue, timeRange v1.Range) (apps []*appmodel.App) {
+func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValue, timeRange v1.Range, progressCallback log.ProgressUpdateFunc) (apps []*appmodel.App) {
 	apps = []*appmodel.App{}
 
 	// set up query context with timeout
@@ -290,6 +290,11 @@ func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValu
 		//log.Tracef("namespace %q: deployment %q\n", namespace, workload)
 	}
 
+	// indicate progress: total newly discovered apps
+	if progressCallback != nil {
+		progressCallback(log.ProgressInfo{WorkloadsTotal: len(apps)}, true)
+	}
+
 	// Fill in deployment details
 	for _, app := range apps {
 		warnings, err := collectDeploymentDetails(ctx, promApi, app, timeRange)
@@ -301,6 +306,14 @@ func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValu
 		}
 
 		//log.Tracef("%#v\n\n", app)
+		if progressCallback != nil {
+			progressCallback(log.ProgressInfo{WorkloadsDone: 1}, true)
+		}
+	}
+
+	// indicate progress: namespace completed
+	if progressCallback != nil {
+		progressCallback(log.ProgressInfo{NamespacesDone: 1}, true)
 	}
 
 	return apps
@@ -335,7 +348,13 @@ func collectSingleApp(ctx context.Context, promApi v1.API, namespace string, tim
 }
 
 // In parallel, collect the workloads in each namespace
-func collectMultipleApps(ctx context.Context, promApi v1.API, namespaces []model.LabelValue, timeRange v1.Range) []*appmodel.App {
+func collectMultipleApps(
+	ctx context.Context, 
+	promApi v1.API, 
+	namespaces []model.LabelValue, 
+	timeRange v1.Range,
+	progressCallback log.ProgressUpdateFunc,
+) []*appmodel.App {
 	// map applications in each namespace, in a goroutine per namespace
 	lists := make(chan []*appmodel.App)
 	var wg sync.WaitGroup
@@ -343,7 +362,7 @@ func collectMultipleApps(ctx context.Context, promApi v1.API, namespaces []model
 	for _, n := range namespaces {
 		go func(namespace model.LabelValue) {
 			defer wg.Done()
-			lists <- mapNamespace(ctx, promApi, namespace, timeRange)
+			lists <- mapNamespace(ctx, promApi, namespace, timeRange, progressCallback)
 		}(n)
 	}
 
@@ -386,7 +405,9 @@ func PromGetAll(
 	workloadKind string,
 	timeStart time.Time,
 	timeEnd time.Time,
-	timeStep time.Duration) ([]*appmodel.App, error) {
+	timeStep time.Duration,
+	progressCallback log.ProgressUpdateFunc,
+) ([]*appmodel.App, error) {
 	// set up API client
 	promApi, err := createAPI(promUri)
 	if err != nil {
@@ -416,14 +437,24 @@ func PromGetAll(
 		namespaces = []model.LabelValue{model.LabelValue(namespace)}
 	}
 	log.Tracef("Namespaces: %v", namespaces)
+	if progressCallback != nil {
+		progressCallback(log.ProgressInfo{NamespacesTotal: len(namespaces)}, false)
+	}
+
 
 	var apps []*appmodel.App
 	if workload == "" {
-		apps = collectMultipleApps(ctx, promApi, namespaces, timeRange)
+		apps = collectMultipleApps(ctx, promApi, namespaces, timeRange, progressCallback)
 	} else {
+		if progressCallback != nil {
+			progressCallback(log.ProgressInfo{WorkloadsTotal: 1}, true)
+		}
 		apps = []*appmodel.App{
 			collectSingleApp(ctx, promApi, namespace, timeRange, workload, workloadKind, workloadApiVersion),
 		}
+		if progressCallback != nil {
+			progressCallback(log.ProgressInfo{NamespacesDone: 1, WorkloadsDone: 1}, true)
+			}
 	}
 
 	return apps, nil

@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"opsani-ignite/log"
 
 	appmodel "opsani-ignite/app/model"
 	opsmath "opsani-ignite/math"

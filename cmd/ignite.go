@@ -12,11 +12,11 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	appmodel "opsani-ignite/app/model"
 
+	"opsani-ignite/log"
 	prom "opsani-ignite/sources/prometheus"
 )
 
@@ -51,16 +51,6 @@ func opportunitySorter(apps []*appmodel.App, i, j int) bool {
 
 func isQualifiedApp(app *appmodel.App) bool {
 	return app.Analysis.Rating >= 0
-}
-
-func setupLogLevel() {
-	if showDebug {
-		log.SetLevel(log.TraceLevel)
-	} else if suppressWarnings {
-		log.SetLevel(log.ErrorLevel)
-	} else {
-		log.SetLevel(log.InfoLevel)
-	}
 }
 
 func displayConfig(namespace, deployment string) {
@@ -134,7 +124,7 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	setupLogLevel()
+	log.SetupLogLevel(showDebug, suppressWarnings)
 
 	// determine namespace & deployment selection
 	namespace := ""
@@ -152,7 +142,12 @@ func runIgnite(cmd *cobra.Command, args []string) {
 
 	// get applications from the cluster
 	prom.Init()
-	apps, err := prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment", timeStart, timeEnd, timeStep)
+	apps := make([]*appmodel.App, 0)
+	err = log.GoWithProgress(func (progressCallback log.ProgressUpdateFunc) error {
+		var innerErr error
+		apps, innerErr = prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment", timeStart, timeEnd, timeStep, progressCallback)
+		return innerErr
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to obtain data from Prometheus at %q: %v", promUri, err)
 		os.Exit(1)

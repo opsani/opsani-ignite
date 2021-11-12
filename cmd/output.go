@@ -12,8 +12,9 @@ import (
 	"sort"
 	"strings"
 
+	"opsani-ignite/log"
+
 	"github.com/olekukonko/tablewriter"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 
 	appmodel "opsani-ignite/app/model"
