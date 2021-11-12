@@ -15,26 +15,34 @@ import (
 
 // ProgressInfo holds the values used to show progress
 type ProgressInfo struct {
-	namespacesTotal int
-	namespacesDone  int
-	workloadsTotal  int
-	workloadsDone   int
+	NamespacesTotal int
+	NamespacesDone  int
+	WorkloadsTotal  int
+	WorkloadsDone   int
 }
 
-// UpdateFunc is the signature of the progress update callback function
-type UpdateFunc func(info ProgressInfo)
+// ProgressUpdateFunc is the signature of the progress update callback function.
+// The update may set absolute or relative values (relative values are +=).
+type ProgressUpdateFunc func(info ProgressInfo, relative bool)
 
 // RunnerFunc is the signature for the function to run with GoWithProgress
-type RunnerFunc func(infoCallback UpdateFunc) error
+type RunnerFunc func(infoCallback ProgressUpdateFunc) error
 
 type progressState struct {
 	lock sync.Mutex
 	info ProgressInfo
 }
 
-func (s *progressState) updateInfo(info ProgressInfo) {
+func (s *progressState) updateInfo(info ProgressInfo, relative bool) {
 	s.lock.Lock()
-	s.info = info
+	if relative {
+		s.info.NamespacesTotal += info.NamespacesTotal
+		s.info.NamespacesDone  += info.NamespacesDone
+		s.info.WorkloadsTotal  += info.WorkloadsTotal
+		s.info.WorkloadsDone   += info.WorkloadsDone
+	} else {
+		s.info = info
+	}
 	s.lock.Unlock()
 }
 
@@ -48,7 +56,7 @@ func (s *progressState) renderProgress(startTime time.Time, final bool) {
 	now := time.Now()
 	elapsed := math.Round(now.Sub(startTime).Seconds()*10) / 10
 	fmt.Fprintf(os.Stderr, "\rCollecting data (%.1fs): %v of %v namespace(s) and %v of %v application(s) completed... ",
-		elapsed, info.namespacesDone, info.namespacesTotal, info.workloadsDone, info.workloadsTotal)
+		elapsed, info.NamespacesDone, info.NamespacesTotal, info.WorkloadsDone, info.WorkloadsTotal)
 	if final {
 		fmt.Fprintf(os.Stderr, "done.\n\n")
 	}
@@ -62,7 +70,7 @@ func GoWithProgress(runner RunnerFunc) error {
 
 	// run the runner function and notify when done
 	go func() {
-		err := runner(func(info ProgressInfo) { state.updateInfo(info) })
+		err := runner(func(info ProgressInfo, relative bool) { state.updateInfo(info, relative) })
 		done <- err
 	}()
 

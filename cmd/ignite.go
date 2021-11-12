@@ -118,15 +118,6 @@ func displayResults(apps []*appmodel.App, targetedApps bool) {
 }
 
 func runIgnite(cmd *cobra.Command, args []string) {
-
-	// demo the progress "bar" with visual inspection
-	// err := log.DemoProgress()
-	// if err != nil {
-	// 	fmt.Print(err)
-	// 	return
-	// }
-	// return
-
 	logFile, err := os.OpenFile(LOG_FILE, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening log file: %v", err)
@@ -151,7 +142,12 @@ func runIgnite(cmd *cobra.Command, args []string) {
 
 	// get applications from the cluster
 	prom.Init()
-	apps, err := prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment", timeStart, timeEnd, timeStep)
+	apps := make([]*appmodel.App, 0)
+	err = log.GoWithProgress(func (progressCallback log.ProgressUpdateFunc) error {
+		var innerErr error
+		apps, innerErr = prom.PromGetAll(ctx, promUri, namespace, deployment, "apps/v1", "Deployment", timeStart, timeEnd, timeStep, progressCallback)
+		return innerErr
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to obtain data from Prometheus at %q: %v", promUri, err)
 		os.Exit(1)
