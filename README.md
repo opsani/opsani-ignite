@@ -57,7 +57,7 @@ Opsani Ignite provides analysis and a number of additional recommendations to im
 
 Best practices require correctly setting resource requirements in a way that meets the performance and reliability requirements of an application (typically, latency and error rate service level objectives), while using assigned resources efficiently to control cloud costs. These values can be discovered manually, often through an onerous and repetitive manual tuning process. 
 
-They can also be automatically identified using automatic optimization services, such as the Opsani optimization-as-a-service tool. Those who are interested in how continuous optimization can remediate these issues can go to the [Opsani website](https://opsani.com), set up a [free trial account](https://opsani.com/create-your-account2/#ignite-readme) and attach the optimizer to their application. Connecting an application to the optimizer typically takes 10-15 minutes and, in a few hours, produces concrete, tested resource specifications that can be applied using a simple `kubectl` command.
+They can also be automatically identified using automatic optimization services, such as the Opsani optimization-as-a-service tool. Those who are interested in how continuous optimization can remediate these issues can go to the [Opsani website](https://opsani.com), set up a [free trial account](https://console.opsani.com/signup) and attach the optimizer to their application. Connecting an application to the optimizer typically takes 10-15 minutes and, in a few hours, produces concrete, tested resource specifications that can be applied using a simple `kubectl` command.
 
 # Interactive... Stdout... or YAML output
 

@@ -146,7 +146,7 @@ func (table *AppTable) outputInteractiveRun() {
 
 	// create frame
 	f := tview.NewFrame(t)
-	f.AddText("To optimize your application, sign up for a free trial account at https://opsani.com/create-your-account2/#ignite", false /*header*/, tview.AlignCenter, 0 /*color*/)
+	f.AddText("To optimize your application, sign up for a free trial account at https://console.opsani.com/signup", false /*header*/, tview.AlignCenter, 0 /*color*/)
 	f.SetBorders(0 /*top*/, 0 /*bottom*/, 0 /*header*/, 1 /*footer*/, 0 /*left*/, 0 /*right*/)
 
 	// create pages and run

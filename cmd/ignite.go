@@ -174,5 +174,5 @@ func runIgnite(cmd *cobra.Command, args []string) {
 	// display results
 	displayResults(apps, deployment != "")
 
-	fmt.Fprint(os.Stderr, "To optimize your application, sign up for a free trial account at https://opsani.com/create-your-account2/#ignite\n")
+	fmt.Fprint(os.Stderr, "To optimize your application, sign up for a free trial account at https://console.opsani.com/signup\n")
 }
