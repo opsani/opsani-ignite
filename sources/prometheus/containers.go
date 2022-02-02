@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"strings"
 	"text/template"
-	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -25,7 +24,7 @@ import (
 // get request or limit values for all resources of all containers of the specificed application
 func getContainersResources(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors, resourceFieldName string) (v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
 	// prepare query string by injecting selector data into the provided query template
@@ -102,7 +101,7 @@ func getContainersResources(ctx context.Context, promApi v1.API, app *appmodel.A
 
 func getContainersUseValueMap(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors) (map[string]float64, v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
 	var allWarnings v1.Warnings
@@ -227,7 +226,7 @@ func handleWarnErr(allWarnings v1.Warnings, newWarnings v1.Warnings, newError er
 
 func collectContainersInfo(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range) (v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
 	var allWarnings v1.Warnings

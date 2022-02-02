@@ -28,7 +28,17 @@ import (
 )
 
 // Example API usage: https://github.com/prometheus/client_golang/blob/master/api/prometheus/v1/example_test.go
-// See also: https://stackoverflow.com/questions/63471775/extract-prometheus-metrics-in-go
+// Note:
+//    Query() returns model.Vector
+//    QueryRange() returns model.Matrix
+//    In turn, these have pointers to SampleStream
+//    In turn, the stream contains (a) Metric (name and LabelSet) and (b) Values of type []SamplePair
+//    In turn, SamplePair contains (a) TimeStamp and (b) SampleValue (typically a float)
+// Use the following command to get relevant references:
+//    go doc v1.API.{Query|QueryValues|LabelValues}
+//    go doc model.{Matrix|Vector|SampleStream|SamplePair|Metric|Value|LabelSet|LabelValue}
+
+const queryTimeout = 10*time.Second		// TODO: consider making configurable
 
 type QuerySelectors struct {
 	appmodel.AppMetadata
@@ -48,7 +58,7 @@ func createAPI(uri *url.URL) (v1.API, error) {
 
 func collectNamespaces(ctx context.Context, promApi v1.API, timeRange v1.Range) (model.LabelValues, v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
 	// Collect namespaces
@@ -73,11 +83,11 @@ func collectNamespaces(ctx context.Context, promApi v1.API, timeRange v1.Range) 
 
 func getAggregateMetric(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, metric string, aggrFunc string) (*float64, v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
 	// prepare query string
-	podRE := fmt.Sprintf("%v-.*", app.Metadata.Workload) // pod naming template is <deployment_name>-<pod_spec_hash>-<pod_unique_id> - TODO: tighten RE to avoid unlikelyconflicts
+	podRE := fmt.Sprintf("%v-.*", app.Metadata.Workload) // pod naming template is <deployment_name>-<pod_spec_hash>-<pod_unique_id> - TODO: tighten RE to avoid unlikely conflicts
 	query := fmt.Sprintf("%v(%v{namespace=%q,pod=~%q})", aggrFunc, metric, app.Metadata.Namespace, podRE)
 
 	// Collect values
@@ -128,7 +138,7 @@ func getAggregateMetric(ctx context.Context, promApi v1.API, app *appmodel.App, 
 
 func getRangedMetric(ctx context.Context, promApi v1.API, app *appmodel.App, timeRange v1.Range, queryTemplate *template.Template, querySelectors *QuerySelectors) (*float64, v1.Warnings, error) {
 	// set up query context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // TODO: fix constant
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 
 	// prepare query string by injecting selector data into the provided query template
@@ -264,7 +274,7 @@ func mapNamespace(ctx context.Context, promApi v1.API, namespace model.LabelValu
 	apps = []*appmodel.App{}
 
 	// set up query context with timeout
-	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second) // TODO: fix constant
+	reqCtx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
 	// Collect values
